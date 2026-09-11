@@ -9,6 +9,11 @@ DerivedDataCache/
 *.VC.db
 *.opensdf
 *.sdf
+*.pdb
+*.exp
+*.lib
+*.obj
+*.sarif
 
 # Plugin-generated binaries
 Plugins/DLSS5ForUE5/Binaries/*
@@ -21,6 +26,24 @@ Plugins/DLSS5ForUE5/Binaries/ThirdParty/Win64/*
 # Keep NVIDIA proprietary runtime binaries out of source commits
 **/nvngx_dlssnr.dll
 
+# Sensitive/local files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.credentials
+credentials.*
+secrets.*
+*.secret
+*.token
+
 # OS / IDE noise
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
