@@ -40,15 +40,22 @@ All four versions were build-tested and runtime-tested with Scene Depth, Motion 
 - `DLSS5ForUE5 [v0.5.6] -UE5.7.zip`
 - `DLSS5ForUE5 [v0.5.6] -UE5.8.zip`
 
-GitHub automatically provides the repository source archives for the release tag.
+Optional manually prepared source backups:
+
+- `DLSS5ForUE5-v0.5.6-Source.zip`
+- `DLSS5ForUE5-v0.5.6-Source.tar.gz`
+
+GitHub also automatically provides its own `Source code (zip)` and `Source code (tar.gz)` archives when the `v0.5.6` release tag is created.
 
 ## SHA-256
 
 ```text
-UE5.5  d74bc6e92eb3d5efd75c65f73393f7f98d23d6539b042c28d92bc994a78a9614
-UE5.6  c91a2926f224a7d678de812998ead62525e30f11ade9d4edff7530ee2dc73dcb
-UE5.7  14c90af00ae0a404e615ac84576989b60d0b56d04bbf021d9367fd6a21d61138
-UE5.8  ed71cd3bdf87eacc663527334cc03c9d1fe9fb0714938079a93b445012e6cbe8
+4672dde4b1040a34852315d2e99b9eab1769cf77b5f487e379966d89eb12ef38  DLSS5ForUE5 [v0.5.6] -UE5.5.zip
+adda21d600347fc57f9553cedc4992aa9077b86aa4d7226b248b817ff2021abb  DLSS5ForUE5 [v0.5.6] -UE5.6.zip
+09641cfa0ea46b621aa4b1d079fd7d5a4560025bb76ad317142209879b72b1a7  DLSS5ForUE5 [v0.5.6] -UE5.7.zip
+2a58e90006f80cdf4dad45a335ccc88a49fc89ce01fd41520a311645981a86d1  DLSS5ForUE5 [v0.5.6] -UE5.8.zip
+f0ef9131484479ab2fa13287b1113c593829f6f6f12d179a1c9abab9e9ff5c8d  DLSS5ForUE5-v0.5.6-Source.zip
+ab09023995a21dfcfd78547e44da2b939c870412ea7580f6d44f27c10e96e816  DLSS5ForUE5-v0.5.6-Source.tar.gz
 ```
 
 ## Installation
@@ -63,3 +70,4 @@ Extract the matching release ZIP into `YourProject/Plugins/`, enable NVIDIA DLSS
 - Motion-vector object velocity remains experimental in render-hook states where UE exposes a `1×1` velocity source.
 - Certain NVIDIA Streamline builds can crash Movie Render Queue during PIE startup. See `docs/KNOWN_ISSUES.md`.
 - NVIDIA runtime components contained in release packages remain governed by NVIDIA's license terms and are not covered by the DLSS5ForUE5 MIT License.
+- Public release ZIPs intentionally exclude PDBs and Unreal `Intermediate` build files to avoid exposing local build paths and unnecessary debug data.
