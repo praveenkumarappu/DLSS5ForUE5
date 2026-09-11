@@ -42,6 +42,15 @@ All four versions were build-tested and runtime-tested with Scene Depth, Motion 
 
 GitHub automatically provides the repository source archives for the release tag.
 
+## SHA-256
+
+```text
+UE5.5  d74bc6e92eb3d5efd75c65f73393f7f98d23d6539b042c28d92bc994a78a9614
+UE5.6  c91a2926f224a7d678de812998ead62525e30f11ade9d4edff7530ee2dc73dcb
+UE5.7  14c90af00ae0a404e615ac84576989b60d0b56d04bbf021d9367fd6a21d61138
+UE5.8  ed71cd3bdf87eacc663527334cc03c9d1fe9fb0714938079a93b445012e6cbe8
+```
+
 ## Installation
 
 Extract the matching release ZIP into `YourProject/Plugins/`, enable NVIDIA DLSS and DLSS5ForUE5, restart Unreal Engine, then open **Tools → DLSS 5 for UE5**.
