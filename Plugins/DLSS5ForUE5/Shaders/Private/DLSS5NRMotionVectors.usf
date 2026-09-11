@@ -1,0 +1,65 @@
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+
+// Dense UE motion-vector guide resolve for NVIDIA DLSS-NR.
+// Output units are pixels. The NGX MVecScaleX/Y values normalize by this guide's extent.
+
+Texture2D<float> DepthTexture;
+Texture2D<float4> VelocityTexture;
+int2 SourceRectMin;
+int2 SourceRectSize;
+uint HasObjectVelocity;
+RWTexture2D<float2> OutputMotionVectors;
+
+float2 DLSS5NRDecodeVelocityXY(float4 EncodedVelocity)
+{
+    const float InvDiv = 1.0f / (0.499f * 0.5f);
+    const float Bias = 32767.0f / 65535.0f;
+    return EncodedVelocity.xy * InvDiv - Bias * InvDiv;
+}
+
+[numthreads(8, 8, 1)]
+void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+    const uint2 LocalPixel = DispatchThreadId.xy;
+    if (LocalPixel.x >= (uint)SourceRectSize.x || LocalPixel.y >= (uint)SourceRectSize.y)
+    {
+        return;
+    }
+
+    const int2 SourcePixel = int2(LocalPixel) + SourceRectMin;
+    const float DeviceDepth = DepthTexture.Load(int3(SourcePixel, 0)).r;
+
+    const float2 ViewportUV = (float2(LocalPixel) + 0.5f) / float2(SourceRectSize);
+    const float2 CurrentClipXY = float2(ViewportUV.x * 2.0f - 1.0f,
+                                       1.0f - ViewportUV.y * 2.0f);
+
+    float2 VelocityClip = 0.0f;
+    bool bUseObjectVelocity = false;
+    float4 EncodedVelocity = 0.0f;
+
+    if (HasObjectVelocity != 0u)
+    {
+        EncodedVelocity = VelocityTexture.Load(int3(SourcePixel, 0));
+        bUseObjectVelocity = any(EncodedVelocity.xy != 0.0f);
+    }
+
+    if (bUseObjectVelocity)
+    {
+        VelocityClip = DLSS5NRDecodeVelocityXY(EncodedVelocity);
+    }
+    else
+    {
+        const float4 CurrentClip = float4(CurrentClipXY, DeviceDepth, 1.0f);
+        const float4 PreviousClipH = mul(CurrentClip, View.ClipToPrevClip);
+
+        if (abs(PreviousClipH.w) > 1.0e-6f)
+        {
+            const float2 PreviousClipXY = PreviousClipH.xy / PreviousClipH.w;
+            VelocityClip = CurrentClipXY - PreviousClipXY;
+        }
+    }
+
+    const float2 VelocityPixels = VelocityClip * float2(0.5f, -0.5f) * float2(SourceRectSize);
+    OutputMotionVectors[LocalPixel] = VelocityPixels;
+}
