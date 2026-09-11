@@ -1,0 +1,26 @@
+# Unreal / Visual Studio generated files
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+.vs/
+*.sln
+*.suo
+*.VC.db
+*.opensdf
+*.sdf
+
+# Plugin-generated binaries
+Plugins/DLSS5ForUE5/Binaries/*
+!Plugins/DLSS5ForUE5/Binaries/ThirdParty/
+Plugins/DLSS5ForUE5/Binaries/ThirdParty/*
+!Plugins/DLSS5ForUE5/Binaries/ThirdParty/Win64/
+Plugins/DLSS5ForUE5/Binaries/ThirdParty/Win64/*
+!Plugins/DLSS5ForUE5/Binaries/ThirdParty/Win64/README.md
+
+# Keep NVIDIA proprietary runtime binaries out of source commits
+**/nvngx_dlssnr.dll
+
+# OS / IDE noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,8 @@
+* text=auto
+*.h text
+*.cpp text
+*.cs text
+*.usf text
+*.md text
+*.ps1 text
+*.uplugin text

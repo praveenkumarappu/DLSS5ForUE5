@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible DLSS5ForUE5 problem
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Please use the precompiled release matching your Unreal Engine version and test at Pass Count 1 before reporting. Do not attach third-party proprietary DLLs to issues."
+  - type: dropdown
+    id: ue
+    attributes:
+      label: Unreal Engine version
+      options:
+        - UE 5.5
+        - UE 5.6
+        - UE 5.7
+        - UE 5.8
+        - Source build / other
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: RTX 4080 SUPER, driver version
+    validations:
+      required: true
+  - type: input
+    id: nvidia-plugin
+    attributes:
+      label: NVIDIA DLSS / Streamline plugin version
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: DLSS5ForUE5 configuration
+      description: Scene Guides, Feed, Depth, Motion, Pass Count, style/preset
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: DLSS5.Status output
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Crash stack or relevant Unreal log
+      render: shell
