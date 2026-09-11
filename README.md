@@ -6,11 +6,9 @@ DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neu
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
-![DLSS5ForUE5 editor window](docs/images/overview.png)
-
 ## Download
 
-Use the precompiled release matching your Unreal Engine version:
+Download the precompiled plugin from the [Releases page](https://github.com/praveenkumarappu/DLSS5ForUE5/releases) and use the ZIP matching your Unreal Engine version:
 
 - `DLSS5ForUE5 [v0.5.6] -UE5.5.zip`
 - `DLSS5ForUE5 [v0.5.6] -UE5.6.zip`
@@ -31,8 +29,6 @@ The GitHub repository contains the universal source code. Normal users do **not*
 
 DLSS5ForUE5 relies on NVIDIA's official UE DLSS/NGX integration for NGX initialization. The NVIDIA DLSS plugin is therefore a required dependency.
 
-![Required NVIDIA plugins](docs/images/nvidia-requirements.png)
-
 ## Installation
 
 1. Install NVIDIA's official DLSS plugin for the same Unreal Engine version as your project.
@@ -52,8 +48,6 @@ YourProject/
 ```text
 Tools → DLSS 5 for UE5
 ```
-
-![Tools menu](docs/images/tools-menu.png)
 
 The precompiled release already contains the plugin binaries for that UE version, so Visual Studio is not required for normal installation.
 
@@ -128,7 +122,7 @@ See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for details and workarounds.
 
 ## Source builds
 
-The repository uses one version-aware source tree for UE 5.5–5.8. Compatibility code is selected at compile time with Unreal Engine version guards. For example, UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
+The repository uses one version-aware source tree for UE 5.5–5.8. Compatibility code is selected at compile time with Unreal Engine version guards. UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
 
 ## Developer
 
