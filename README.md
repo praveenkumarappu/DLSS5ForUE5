@@ -6,7 +6,7 @@ DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neu
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
-![DLSS5ForUE5 v0.5.6 editor window](docs/images/main-ui.webp)
+![DLSS5ForUE5 v0.5.6 editor window](docs/images/02-main-ui.png)
 
 ## Download
 
@@ -31,7 +31,7 @@ The GitHub repository contains the universal source code. Normal users do **not*
 
 DLSS5ForUE5 relies on NVIDIA's official UE DLSS/NGX integration for NGX initialization. The NVIDIA DLSS plugin is therefore a required dependency.
 
-![NVIDIA DLSS plugin requirements](docs/images/nvidia-required-plugins.webp)
+![NVIDIA DLSS plugin requirements](docs/images/05-nvidia-required-plugins.png)
 
 ## Installation
 
@@ -53,7 +53,7 @@ YourProject/
 Tools → DLSS 5 for UE5
 ```
 
-![Open DLSS 5 for UE5 from the Tools menu](docs/images/tools-menu.webp)
+![Open DLSS 5 for UE5 from the Tools menu](docs/images/01-tools-menu.png)
 
 The precompiled release already contains the plugin binaries for that UE version, so Visual Studio is not required for normal installation.
 
@@ -61,11 +61,11 @@ The precompiled release already contains the plugin binaries for that UE version
 
 **Plugin card**
 
-![DLSS5ForUE5 plugin card](docs/images/plugin-card.webp)
+![DLSS5ForUE5 plugin card](docs/images/03-plugin-card.png)
 
 **Plugin Browser**
 
-![DLSS5ForUE5 in Unreal Engine Plugin Browser](docs/images/plugin-browser.webp)
+![DLSS5ForUE5 in Unreal Engine Plugin Browser](docs/images/04-plugin-browser.png)
 
 ## Verified engine versions
 
