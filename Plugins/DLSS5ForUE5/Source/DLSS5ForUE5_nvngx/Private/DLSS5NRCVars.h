@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CoreMinimal.h"
+
 namespace DLSS5NR
 {
     extern int32 GetEnable();

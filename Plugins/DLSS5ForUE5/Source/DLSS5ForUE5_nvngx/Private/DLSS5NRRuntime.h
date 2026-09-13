@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "DLSS5NRDiagnostics.h"
 #include "DLSS5NRNGXABI.h"
+#include "RHIResources.h"
 
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
@@ -10,6 +11,9 @@ struct ID3D12Resource;
 
 struct FDLSS5NREvaluateDesc
 {
+    uint64 HistoryKey = 0; // Stable view-state key plus sequential pass index.
+    uint64 FrameNumber = 0;
+    FGPUFenceRHIRef CompletionFence;
     ID3D12GraphicsCommandList* CommandList = nullptr;
     ID3D12Resource* Color = nullptr;
     ID3D12Resource* Output = nullptr;
@@ -50,7 +54,9 @@ public:
     void Unload();
     bool EnsureInitialized(ID3D12Device* Device);
     bool Evaluate(const FDLSS5NREvaluateDesc& Desc);
-    void ReleaseFeature();
+    FCriticalSection& GetExecutionMutex() { return ExecutionMutex; }
+    // Call only after submitting and waiting for all GPU work during module shutdown.
+    void ReleaseAllFeaturesAfterGPUIdle();
 
     void UpdateFrameTelemetry(const FDLSS5NRFrameTelemetry& Telemetry);
     FDLSS5NRDiagnosticsSnapshot GetDiagnosticsSnapshot() const;
@@ -69,6 +75,7 @@ public:
     FNGXResult GetLastNGXResult() const { return LastNGXResult; }
 
 private:
+    friend class FDLSS5NRRuntimeRegressionTest;
     FDLSS5NRRuntime() = default;
     ~FDLSS5NRRuntime() = default;
 
@@ -86,7 +93,22 @@ private:
     using PFN_DestroyParameters = FNGXResult(__cdecl*)(FNGXParameter*);
 
     bool ResolveNGXCoreParameters();
-    bool CreateFeature(const FDLSS5NREvaluateDesc& Desc);
+    struct FFeatureState
+    {
+        FNGXHandle* Handle = nullptr;
+        FIntPoint Size = FIntPoint::ZeroValue;
+        int32 Preset = INDEX_NONE;
+        bool bUsesDepth = false;
+        bool bUsesMotion = false;
+        FIntPoint DepthSize = FIntPoint::ZeroValue;
+        FIntPoint MotionSize = FIntPoint::ZeroValue;
+        bool bNeedsReset = true;
+        uint64 LastFrame = 0;
+        FGPUFenceRHIRef CompletionFence;
+    };
+    FFeatureState* CreateFeature(const FDLSS5NREvaluateDesc& Desc);
+    void CollectCompletedFeatures(uint64 FrameNumber);
+    void DestroyFeature(FFeatureState& Feature);
     void SetError(const FString& Error, FNGXResult Result = 0);
     void DetectCallerModulePath();
 
@@ -112,13 +134,12 @@ private:
     bool bOwnCoreParameters = false;
 
     ID3D12Device* InitializedDevice = nullptr;
-    FNGXHandle* FeatureHandle = nullptr;
+    TMap<uint64, FFeatureState> Features;
+    TArray<FFeatureState> RetiredFeatures;
+    // Parameter bindings belong to the shared CPU parameter block, not a view.
+    bool bParametersHadDepth = false;
+    bool bParametersHadMotion = false;
     FIntPoint FeatureSize = FIntPoint::ZeroValue;
-    int32 FeaturePreset = INDEX_NONE;
-    bool bFeatureUsesDepth = false;
-    bool bFeatureUsesMotion = false;
-    FIntPoint FeatureDepthSize = FIntPoint::ZeroValue;
-    FIntPoint FeatureMotionSize = FIntPoint::ZeroValue;
     bool bInitialized = false;
     bool bSnippetPopulated = false;
     bool bCallerGatePathReady = false;
@@ -126,6 +147,7 @@ private:
     FNGXResult LastNGXResult = 0;
 
     mutable FCriticalSection DiagnosticsMutex;
+    mutable FCriticalSection ExecutionMutex;
     FDLSS5NRFrameTelemetry LastTelemetry;
     uint64 EvaluateAttempts = 0;
     uint64 FailedFrames = 0;

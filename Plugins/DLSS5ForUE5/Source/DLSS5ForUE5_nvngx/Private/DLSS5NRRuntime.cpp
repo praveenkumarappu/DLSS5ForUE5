@@ -221,11 +221,9 @@ bool FDLSS5NRRuntime::EnsureInitialized(ID3D12Device* Device)
 
     if (bInitialized)
     {
-        ReleaseFeature();
-        Shutdown1(InitializedDevice);
-        bInitialized = false;
-        bSnippetPopulated = false;
-        InitializedDevice = nullptr;
+        // Never tear down another device's in-flight features from an evaluation callback.
+        SetError(TEXT("DLSS-NR device changed; restart the editor to reinitialize safely."));
+        return false;
     }
 
     if (!bCallerGatePathReady)
@@ -272,7 +270,7 @@ bool FDLSS5NRRuntime::EnsureInitialized(ID3D12Device* Device)
     return true;
 }
 
-bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
+FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
 {
     const FIntPoint OutputSize = D.OutputRect.Size();
     const bool bUseDepth = D.Depth != nullptr && D.DepthRect.Width() > 0 && D.DepthRect.Height() > 0;
@@ -282,33 +280,38 @@ bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
 
     if (!bInitialized || !bSnippetPopulated || !CoreParameters || !D.CommandList || OutputSize.X <= 0 || OutputSize.Y <= 0)
     {
-        return false;
+        return nullptr;
     }
 
     // The NR snippet specializes internal resources around the active guide contract. Recreate
     // Feature 18 whenever guide availability/dimensions change instead of hot-swapping depth/MV
     // resources into a feature that was created in color-only mode.
-    const bool bSameContract = FeatureHandle &&
-        FeatureSize == OutputSize &&
-        FeaturePreset == D.Preset &&
-        bFeatureUsesDepth == bUseDepth &&
-        bFeatureUsesMotion == bUseMotion &&
-        FeatureDepthSize == DepthSize &&
-        FeatureMotionSize == MotionSize;
+    CollectCompletedFeatures(D.FrameNumber);
+    FFeatureState* Existing = Features.Find(D.HistoryKey);
+    const bool bSameContract = Existing && Existing->Handle &&
+        Existing->Size == OutputSize &&
+        Existing->Preset == D.Preset &&
+        Existing->bUsesDepth == bUseDepth &&
+        Existing->bUsesMotion == bUseMotion &&
+        Existing->DepthSize == DepthSize &&
+        Existing->MotionSize == MotionSize;
 
     if (bSameContract)
     {
-        return true;
+        return Existing;
     }
 
-    const bool bPreviousFeatureUsedDepth = bFeatureUsesDepth;
-    const bool bPreviousFeatureUsedMotion = bFeatureUsesMotion;
-    ReleaseFeature();
+    if (Existing)
+    {
+        // Recording another frame does not mean the GPU finished the previous one.
+        RetiredFeatures.Add(MoveTemp(*Existing));
+        Features.Remove(D.HistoryKey);
+    }
 
     FNGXParameter* P = CoreParameters;
     if (!P)
     {
-        return false;
+        return nullptr;
     }
 
     const auto SetRect = [P](const char* Prefix, const FIntRect& R)
@@ -352,7 +355,7 @@ bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
         P->Set("DLSSNR.Depth", D.Depth);
         SetRect("DLSSNR.Depth", D.DepthRect);
     }
-    else if (bPreviousFeatureUsedDepth)
+    else if (bParametersHadDepth)
     {
         // Clear a pointer left by the previous guide-enabled feature, but do not inject a new
         // null key into the proven color-only creation path.
@@ -365,7 +368,7 @@ bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
         P->Set("DLSSNR.MVec", D.MotionVectors);
         SetRect("DLSSNR.MVec", D.MotionRect);
     }
-    else if (bPreviousFeatureUsedMotion)
+    else if (bParametersHadMotion)
     {
         P->Set("DLSSNR.MVec", static_cast<ID3D12Resource*>(nullptr));
         SetRect("DLSSNR.MVec", FIntRect());
@@ -376,27 +379,41 @@ bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
     P->Set("DLSSNR.DepthInverted", D.bDepthInverted ? 1 : 0);
     P->Set("DLSSNR.Enabled", 1);
     P->Set("DLSSNR.Reset", 1);
+    P->Set("Jitter.Offset.X", 0.0f);
+    P->Set("Jitter.Offset.Y", 0.0f);
+    bParametersHadDepth = bUseDepth;
+    bParametersHadMotion = bUseMotion;
 
     FNGXHandle* NewHandle = nullptr;
     const FNGXResult Result = CreateFeatureFn(D.CommandList, DLSS5NRNGX::NeuralRenderingFeature, P, &NewHandle);
     LastNGXResult = Result;
     if (!DLSS5NRNGX::Succeeded(Result) || !NewHandle)
     {
+        if (NewHandle)
+        {
+            FFeatureState FailedFeature;
+            FailedFeature.Handle = NewHandle;
+            FailedFeature.CompletionFence = D.CompletionFence;
+            RetiredFeatures.Add(MoveTemp(FailedFeature));
+        }
         SetError(FString::Printf(TEXT("DLSS-NR CreateFeature(18) failed at %dx%d preset=%d depth=%s(%dx%d) motion=%s(%dx%d): 0x%08X"),
             OutputSize.X, OutputSize.Y, D.Preset,
             bUseDepth ? TEXT("YES") : TEXT("NO"), DepthSize.X, DepthSize.Y,
             bUseMotion ? TEXT("YES") : TEXT("NO"), MotionSize.X, MotionSize.Y,
             Result), Result);
-        return false;
+        return nullptr;
     }
 
-    FeatureHandle = NewHandle;
-    FeatureSize = OutputSize;
-    FeaturePreset = D.Preset;
-    bFeatureUsesDepth = bUseDepth;
-    bFeatureUsesMotion = bUseMotion;
-    FeatureDepthSize = DepthSize;
-    FeatureMotionSize = MotionSize;
+    FFeatureState& Feature = Features.Add(D.HistoryKey);
+    Feature.Handle = NewHandle;
+    Feature.Size = OutputSize;
+    Feature.Preset = D.Preset;
+    Feature.bUsesDepth = bUseDepth;
+    Feature.bUsesMotion = bUseMotion;
+    Feature.DepthSize = DepthSize;
+    Feature.MotionSize = MotionSize;
+    Feature.CompletionFence = D.CompletionFence;
+    Feature.LastFrame = D.FrameNumber;
     LastError.Reset();
 
     UE_LOG(LogDLSS5, Display,
@@ -404,8 +421,8 @@ bool FDLSS5NRRuntime::CreateFeature(const FDLSS5NREvaluateDesc& D)
         OutputSize.X, OutputSize.Y, D.Preset,
         bUseDepth ? TEXT("YES") : TEXT("NO"), DepthSize.X, DepthSize.Y,
         bUseMotion ? TEXT("YES") : TEXT("NO"), MotionSize.X, MotionSize.Y,
-        FeatureHandle->Id);
-    return true;
+        Feature.Handle->Id);
+    return &Feature;
 }
 
 bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
@@ -430,7 +447,7 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
         }
     }
 
-    if (!D.CommandList || !D.Color || !D.Output)
+    if (!D.CommandList || !D.Color || !D.Output || !D.CompletionFence.IsValid())
     {
         { FScopeLock Lock(&DiagnosticsMutex); ++FailedFrames; }
         SetError(TEXT("DLSS-NR Evaluate skipped: Color, Output or command list is null."));
@@ -438,11 +455,22 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
     }
 
     const FIntPoint OutputSize = D.OutputRect.Size();
-    if (!CreateFeature(D))
+    FFeatureState* Feature = CreateFeature(D);
+    if (!Feature)
     {
         FScopeLock Lock(&DiagnosticsMutex);
         ++FailedFrames;
         return false;
+    }
+    const bool bReset = D.bReset || Feature->bNeedsReset ||
+        D.FrameNumber > Feature->LastFrame + 1;
+    Feature->LastFrame = D.FrameNumber;
+    Feature->CompletionFence = D.CompletionFence;
+    {
+        FScopeLock Lock(&DiagnosticsMutex);
+        FeatureSize = Feature->Size;
+        LastTelemetry.bReset = bReset;
+        if (bReset && !D.bReset) ++ResetFrames;
     }
 
     FNGXParameter* P = CoreParameters;
@@ -469,8 +497,8 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
 
     P->Set("DLSSNR.Color", D.Color);
     P->Set("DLSSNR.Output", D.Output);
-    if (D.Depth) P->Set("DLSSNR.Depth", D.Depth);
-    if (D.MotionVectors) P->Set("DLSSNR.MVec", D.MotionVectors);
+    if (D.Depth || bParametersHadDepth) P->Set("DLSSNR.Depth", D.Depth);
+    if (D.MotionVectors || bParametersHadMotion) P->Set("DLSSNR.MVec", D.MotionVectors);
 
     P->Set("DLSSNR.Width", static_cast<unsigned int>(OutputSize.X));
     P->Set("DLSSNR.Height", static_cast<unsigned int>(OutputSize.Y));
@@ -485,19 +513,21 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
 
     SetRect("DLSSNR.Color", D.ColorRect);
     SetRect("DLSSNR.Output", D.OutputRect);
-    if (D.Depth) SetRect("DLSSNR.Depth", D.DepthRect);
-    if (D.MotionVectors) SetRect("DLSSNR.MVec", D.MotionRect);
+    if (D.Depth || bParametersHadDepth) SetRect("DLSSNR.Depth", D.DepthRect);
+    if (D.MotionVectors || bParametersHadMotion) SetRect("DLSSNR.MVec", D.MotionRect);
+    bParametersHadDepth = D.Depth != nullptr;
+    bParametersHadMotion = D.MotionVectors != nullptr;
 
     P->Set("DLSSNR.MVecScaleX", D.MotionScaleX);
     P->Set("DLSSNR.MVecScaleY", D.MotionScaleY);
     P->Set("DLSSNR.DepthInverted", D.bDepthInverted ? 1 : 0);
     P->Set("DLSSNR.Enabled", 1);
-    P->Set("DLSSNR.Reset", D.bReset ? 1 : 0);
+    P->Set("DLSSNR.Reset", bReset ? 1 : 0);
 
-    // RenoDX's working integration preserves the generic NGX jitter keys. The supplied
-    // NR snippet does not expose a DLSSNR.Jitter key, so use the core NGX names only.
-    P->Set("Jitter.Offset.X", D.JitterPixels.X);
-    P->Set("Jitter.Offset.Y", D.JitterPixels.Y);
+    // The post-tonemap input is already temporally reconstructed. Applying the original
+    // camera jitter here would move an otherwise stationary image every frame.
+    P->Set("Jitter.Offset.X", 0.0f);
+    P->Set("Jitter.Offset.Y", 0.0f);
 
     P->Set("DLSSNR.Intensity", D.Intensity);
     P->Set("DLSSNR.LocalToneStrength", D.LocalTone);
@@ -507,14 +537,16 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
     P->Set("DLSSNR.Style", D.Style);
     P->Set("DLSSNR.UICorrection", D.bUICorrection ? 1 : 0);
 
-    const FNGXResult Result = EvaluateFeatureFn(D.CommandList, FeatureHandle, P, nullptr);
+    const FNGXResult Result = EvaluateFeatureFn(D.CommandList, Feature->Handle, P, nullptr);
     LastNGXResult = Result;
     if (!DLSS5NRNGX::Succeeded(Result))
     {
+        Feature->bNeedsReset = true;
         { FScopeLock Lock(&DiagnosticsMutex); ++FailedFrames; }
         SetError(FString::Printf(TEXT("DLSS-NR EvaluateFeature failed: 0x%08X"), Result), Result);
         return false;
     }
+    Feature->bNeedsReset = false;
 
     {
         FScopeLock Lock(&DiagnosticsMutex);
@@ -532,6 +564,7 @@ void FDLSS5NRRuntime::UpdateFrameTelemetry(const FDLSS5NRFrameTelemetry& Telemet
 
 FDLSS5NRDiagnosticsSnapshot FDLSS5NRRuntime::GetDiagnosticsSnapshot() const
 {
+    FScopeLock ExecutionLock(&ExecutionMutex);
     FScopeLock Lock(&DiagnosticsMutex);
 
     FDLSS5NRDiagnosticsSnapshot Out;
@@ -572,29 +605,57 @@ FDLSS5NRDiagnosticsSnapshot FDLSS5NRRuntime::GetDiagnosticsSnapshot() const
     return Out;
 }
 
-void FDLSS5NRRuntime::ReleaseFeature()
+void FDLSS5NRRuntime::DestroyFeature(FFeatureState& Feature)
 {
-    if (FeatureHandle && ReleaseFeatureFn)
+    if (Feature.Handle && ReleaseFeatureFn)
     {
-        const FNGXResult Result = ReleaseFeatureFn(FeatureHandle);
+        const FNGXResult Result = ReleaseFeatureFn(Feature.Handle);
         LastNGXResult = Result;
         if (!DLSS5NRNGX::Succeeded(Result))
         {
             UE_LOG(LogDLSS5, Warning, TEXT("DLSS-NR ReleaseFeature returned 0x%08X"), Result);
         }
-        FeatureHandle = nullptr;
-        FeatureSize = FIntPoint::ZeroValue;
-        FeaturePreset = INDEX_NONE;
-        bFeatureUsesDepth = false;
-        bFeatureUsesMotion = false;
-        FeatureDepthSize = FIntPoint::ZeroValue;
-        FeatureMotionSize = FIntPoint::ZeroValue;
+        Feature.Handle = nullptr;
     }
+}
+
+void FDLSS5NRRuntime::CollectCompletedFeatures(uint64 FrameNumber)
+{
+    // Retire closed views and unused passes as well as resized/reconfigured features.
+    for (auto It = Features.CreateIterator(); It; ++It)
+    {
+        if (FrameNumber > It.Value().LastFrame + 120)
+        {
+            RetiredFeatures.Add(MoveTemp(It.Value()));
+            It.RemoveCurrent();
+        }
+    }
+    for (int32 Index = RetiredFeatures.Num() - 1; Index >= 0; --Index)
+    {
+        FFeatureState& Feature = RetiredFeatures[Index];
+        if (Feature.CompletionFence.IsValid() &&
+            Feature.CompletionFence->NumPendingWriteCommands.GetValue() == 0 &&
+            Feature.CompletionFence->Poll())
+        {
+            DestroyFeature(Feature);
+            RetiredFeatures.RemoveAtSwap(Index);
+        }
+    }
+}
+
+void FDLSS5NRRuntime::ReleaseAllFeaturesAfterGPUIdle()
+{
+    for (auto& Entry : Features) DestroyFeature(Entry.Value);
+    for (FFeatureState& Feature : RetiredFeatures) DestroyFeature(Feature);
+    Features.Empty();
+    RetiredFeatures.Empty();
+    FeatureSize = FIntPoint::ZeroValue;
 }
 
 void FDLSS5NRRuntime::Unload()
 {
-    ReleaseFeature();
+    // ShutdownModule drains the GPU before reaching this point. Load failure has no features.
+    check(Features.IsEmpty() && RetiredFeatures.IsEmpty());
 
     if (bInitialized && Shutdown1 && InitializedDevice)
     {
