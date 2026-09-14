@@ -7,8 +7,15 @@ public class DLSS5ForUE5_nvngx : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         CppStandard = CppStandardVersion.Cpp20;
+
         // FViewInfo::ViewRect is the actual scene-buffer rectangle before upscaling.
-        PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
+        // UE 5.6+ Renderer private headers also include types from Renderer/Internal,
+        // so expose both paths to keep the shared source compatible across UE 5.5-5.8.
+        PrivateIncludePaths.AddRange(new string[]
+        {
+            Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"),
+            Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Internal")
+        });
 
         PublicDependencyModuleNames.AddRange(new string[]
         {
