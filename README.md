@@ -149,6 +149,10 @@ The repository uses one version-aware source tree for UE 5.5–5.8. Compatibilit
 - Instagram: https://instagram.com/praveenkumarappu
 - GitHub: https://github.com/praveenkumarappu
 
+## Contributors
+
+- **[@scragnog](https://github.com/scragnog)** — identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
+
 ## Documentation
 
 - [Installation](docs/INSTALLATION.md)
