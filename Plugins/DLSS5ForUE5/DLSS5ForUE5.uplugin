@@ -1,14 +1,14 @@
 {
     "FileVersion": 3,
-    "Version": 506,
-    "VersionName": "0.5.6",
+    "Version": 600,
+    "VersionName": "0.6.0",
     "FriendlyName": "DLSS 5 for UE5",
-    "Description": "Unofficial experimental UE5 D3D12 integration for NVIDIA DLSS 3D-Guided Neural Rendering. Dedicated editor UI, scene guides, temporal data, 1-4 sequential Neural Rendering passes, diagnostics, and safe-mode recovery.",
+    "Description": "Unofficial UE5 D3D12 integration for NVIDIA DLSS 3D-Guided Neural Rendering. Dedicated editor UI, scene guides, isolated temporal history per view/pass, GPU-safe feature lifetime handling, 1-4 sequential Neural Rendering passes, diagnostics, and safe-mode recovery.",
     "Category": "Rendering",
     "CreatedBy": "Praveen Kumar",
     "CanContainContent": false,
     "CanContainVerse": false,
-    "IsBetaVersion": true,
+    "IsBetaVersion": false,
     "Installed": false,
     "SupportedTargetPlatforms": [
         "Win64"
