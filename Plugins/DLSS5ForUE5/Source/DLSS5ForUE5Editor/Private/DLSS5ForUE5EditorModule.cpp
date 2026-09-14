@@ -26,7 +26,7 @@
 namespace
 {
     const FName DLSS5ForUE5TabName(TEXT("DLSS5ForUE5"));
-    const TCHAR* DLSS5BuildStamp = TEXT("2026-09-11T21:31:39+05:30");
+    const TCHAR* DLSS5BuildStamp = TEXT("2026-09-14");
 
     int32 GetPassCount()
     {
@@ -387,7 +387,7 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
                         .AutoWidth()
                         [
                             SNew(SButton)
-                             .ToolTipText(LOCTEXT("GitHubTip", "Open Praveen Kumar's GitHub profile."))
+                            .ToolTipText(LOCTEXT("GitHubTip", "Open Praveen Kumar's GitHub profile."))
                             .Text(LOCTEXT("GitHubLink", "GitHub"))
                             .OnClicked_Lambda([]()
                             {
@@ -406,7 +406,7 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
                     .AutoHeight()
                     [
                         SNew(STextBlock)
-                        .Text(FText::FromString(FString::Printf(TEXT("Version: 0.5.6  |  Build: %s"), DLSS5BuildStamp)))
+                        .Text(FText::FromString(FString::Printf(TEXT("Version: 0.6.0 Stable  |  Build: %s"), DLSS5BuildStamp)))
                     ]
                 ]
             ]
