@@ -6,16 +6,16 @@ DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neu
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
-![DLSS5ForUE5 v0.5.6 editor window](docs/images/02-main-ui.png)
+![DLSS5ForUE5 v0.6.0 editor window](docs/images/02-main-ui.png)
 
 ## Download
 
 Download the precompiled plugin from the [Releases page](https://github.com/praveenkumarappu/DLSS5ForUE5/releases) and use the ZIP matching your Unreal Engine version:
 
-- `DLSS5ForUE5 [v0.5.6] -UE5.5.zip`
-- `DLSS5ForUE5 [v0.5.6] -UE5.6.zip`
-- `DLSS5ForUE5 [v0.5.6] -UE5.7.zip`
-- `DLSS5ForUE5 [v0.5.6] -UE5.8.zip`
+- `DLSS5ForUE5 [v0.6.0] -UE5.5.zip`
+- `DLSS5ForUE5 [v0.6.0] -UE5.6.zip`
+- `DLSS5ForUE5 [v0.6.0] -UE5.7.zip`
+- `DLSS5ForUE5 [v0.6.0] -UE5.8.zip`
 
 The GitHub repository contains the universal source code. Normal users do **not** need to compile the plugin when using the matching release ZIP.
 
@@ -161,7 +161,8 @@ The repository uses one version-aware source tree for UE 5.5–5.8. Compatibilit
 - [Known Issues](docs/KNOWN_ISSUES.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Release Notes](RELEASE_NOTES_v0.5.6.md)
+- [Release Notes](RELEASE_NOTES_v0.6.0.md)
+- [SHA-256 Checksums](SHA256SUMS_v0.6.0.txt)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
