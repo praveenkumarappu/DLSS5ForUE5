@@ -12,6 +12,7 @@
 #include "RenderingThread.h"
 #include "SceneViewExtension.h"
 #include "ShaderCore.h"
+#include "RHICommandList.h"
 
 DEFINE_LOG_CATEGORY(LogDLSS5);
 
@@ -200,7 +201,15 @@ void FDLSS5ForUE5Module::ShutdownModule()
 
     ViewExtension.Reset();
 
-    // Ensure no queued render/RHI lambda still references the native runtime before unloading it.
+    // Flushing the CPU render thread alone does not finish GPU work.
+    if (GDynamicRHI)
+    {
+        ENQUEUE_RENDER_COMMAND(DLSS5NRDrainGPU)([](FRHICommandListImmediate& RHICmdList)
+        {
+            RHICmdList.SubmitAndBlockUntilGPUIdle();
+            FDLSS5NRRuntime::Get().ReleaseAllFeaturesAfterGPUIdle();
+        });
+    }
     FlushRenderingCommands();
     FDLSS5NRRuntime::Get().Unload();
 }

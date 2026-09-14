@@ -7,6 +7,8 @@ public class DLSS5ForUE5_nvngx : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         CppStandard = CppStandardVersion.Cpp20;
+        // FViewInfo::ViewRect is the actual scene-buffer rectangle before upscaling.
+        PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
 
         PublicDependencyModuleNames.AddRange(new string[]
         {

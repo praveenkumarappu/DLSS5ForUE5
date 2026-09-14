@@ -36,6 +36,7 @@ private:
     struct FViewHistoryState
     {
         bool bValid = false;
+        uint64 LastFrame = 0;
         FIntRect ColorRect;
         FIntRect RenderRect;
         FIntPoint DepthExtent = FIntPoint::ZeroValue;

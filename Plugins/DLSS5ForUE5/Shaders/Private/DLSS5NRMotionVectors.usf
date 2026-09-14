@@ -41,7 +41,7 @@ void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
     if (HasObjectVelocity != 0u)
     {
         EncodedVelocity = VelocityTexture.Load(int3(SourcePixel, 0));
-        bUseObjectVelocity = any(EncodedVelocity.xy != 0.0f);
+        bUseObjectVelocity = EncodedVelocity.x > 0.0f;
     }
 
     if (bUseObjectVelocity)
@@ -61,5 +61,6 @@ void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
     }
 
     const float2 VelocityPixels = VelocityClip * float2(0.5f, -0.5f) * float2(SourceRectSize);
-    OutputMotionVectors[LocalPixel] = VelocityPixels;
+    // UE velocity is current minus previous; NGX expects previous minus current.
+    OutputMotionVectors[LocalPixel] = -VelocityPixels;
 }

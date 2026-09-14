@@ -13,6 +13,9 @@
 #include "RHI.h"
 #include "SceneManagement.h"
 #include "SceneTexturesConfig.h"
+#include "SceneRendering.h"
+#include "Engine/World.h"
+#include "Misc/ScopeLock.h"
 
 #if DLSS5NR_WITH_D3D12
 #include "ID3D12DynamicRHI.h"
@@ -75,16 +78,18 @@ namespace
         return FMath::Abs(GuideAspect - OutputAspect) <= FMath::Max<double>(0.01, OutputAspect * 0.01);
     }
 
-    FVector2f ProjectionJitterToPixels(const FSceneView& View, const FIntRect& RenderRect)
+    bool IsSupportedNRView(const FSceneView& View)
     {
-        // FViewMatrices stores jitter as projection-matrix offsets. UE inserts pixel jitter as:
-        //   ProjectionJitterX = PixelX *  2 / Width
-        //   ProjectionJitterY = PixelY * -2 / Height
-        // Convert it back to the pixel-space convention expected by NGX/Streamline diagnostics.
-        const FVector2D ProjectionJitter = View.ViewMatrices.GetTemporalAAJitter();
-        return FVector2f(
-            static_cast<float>(ProjectionJitter.X * 0.5 * RenderRect.Width()),
-            static_cast<float>(ProjectionJitter.Y * -0.5 * RenderRect.Height()));
+        if (!View.bIsViewInfo || !View.State || !View.Family || !View.Family->Scene ||
+            View.bIsSceneCapture || View.bIsReflectionCapture || View.bIsPlanarReflection ||
+            !View.IsPerspectiveProjection() || View.Family->EngineShowFlags.HitProxies)
+        {
+            return false;
+        }
+        const UWorld* World = View.Family->Scene->GetWorld();
+        // Asset thumbnails and material/mesh previews must not consume NR history.
+        return World && (World->WorldType == EWorldType::Editor ||
+            World->WorldType == EWorldType::PIE || World->WorldType == EWorldType::Game);
     }
 
     uint32 GetStableViewKey(const FSceneView& View)
@@ -127,7 +132,7 @@ void FDLSS5NRViewExtension::SubscribeToPostProcessingPass(
     // Tonemap remains the v0.4 insertion point: temporal upscaling / DLSS has already produced
     // the current color path, while Slate UI is still downstream. Scene depth/velocity remain
     // available through FPostProcessMaterialInputs::SceneTextures.
-    if (bIsPassEnabled)
+    if (bIsPassEnabled && IsSupportedNRView(InView))
     {
         InOutPassCallbacks.Add(
             FAfterPassCallbackDelegate::CreateRaw(this, &FDLSS5NRViewExtension::AfterTonemap_RenderThread));
@@ -141,7 +146,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 {
     const FScreenPassTexture SceneColor = FScreenPassTexture::CopyFromSlice(
         GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
-    if (!SceneColor.IsValid() || DLSS5NR::GetEnable() == 0)
+    if (!SceneColor.IsValid() || DLSS5NR::GetEnable() == 0 || !IsSupportedNRView(View))
     {
         return SceneColor;
     }
@@ -168,7 +173,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     // The scene guide buffers belong to the primary render view. With DLSS/TSR active this may
     // be lower resolution than the post-upscale color rect, so keep independent subrects.
-    const FIntRect RenderRect = View.UnscaledViewRect;
+    const FIntRect RenderRect = static_cast<const FViewInfo&>(View).ViewRect;
     if (RenderRect.Width() <= 0 || RenderRect.Height() <= 0)
     {
         return SceneColor;
@@ -195,9 +200,8 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
     const bool bDepthAvailable = SceneDepth != nullptr;
     const bool bVelocityAvailable = SceneVelocity != nullptr;
 
-    // FSceneView::UnscaledViewRect is the public UE5.6 view rectangle. Scene guides can be
-    // lower resolution than the post-upscale color output, so clamp the active rectangle to
-    // the actual scene-depth allocation before resolving compact zero-based guide textures.
+    // Use the actual pre-upscale rectangle, not the display rectangle or allocation extent.
+    // Editor scene textures can contain padding and other viewports.
     const FIntRect GuideSourceRect = bDepthAvailable
         ? ClampRectToExtent(RenderRect, SceneDepth->Desc.Extent)
         : FIntRect();
@@ -231,16 +235,22 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
     const bool bUseDepth = bFeedSceneGuides && bDepthCompatible;
     const bool bUseMotion = bFeedSceneGuides && bMotionCompatible;
 
-    const FVector2f JitterPixels = ProjectionJitterToPixels(View, RenderRect);
+    // NR receives post-upscale color, so its input has no sampling jitter.
+    const FVector2f JitterPixels = FVector2f::ZeroVector;
     const float PreExposure = View.State ? FMath::Max(View.State->GetPreExposure(), KINDA_SMALL_NUMBER) : 1.0f;
 
     FString ResetReason;
     bool bReset = false;
     const uint32 ViewKey = GetStableViewKey(View);
+    const uint64 FrameNumber = GFrameNumberRenderThread;
+    for (auto It = HistoryByView.CreateIterator(); It; ++It)
+    {
+        if (FrameNumber > It.Value().LastFrame + 120) It.RemoveCurrent();
+    }
     const FViewHistoryState* Previous = HistoryByView.Find(ViewKey);
 
     // A first evaluation always starts a new NR history, independent of the automatic-reset toggle.
-    if (!Previous || !Previous->bValid)
+    if (!Previous || !Previous->bValid || FrameNumber > Previous->LastFrame + 1)
     {
         bReset = true;
         ResetReason = TEXT("first NR frame");
@@ -263,13 +273,13 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
             bReset = true;
             ResetReason = TEXT("view/subrect changed");
         }
-        else if (Previous->DepthExtent != (SceneDepth ? SceneDepth->Desc.Extent : FIntPoint::ZeroValue) ||
-                 Previous->VelocityExtent != (SceneVelocity ? SceneVelocity->Desc.Extent : FIntPoint::ZeroValue))
+        else if (Previous->DepthExtent != (bUseDepth ? ResolvedDepth->Desc.Extent : FIntPoint::ZeroValue) ||
+                 Previous->VelocityExtent != (bUseMotion ? DenseMotion->Desc.Extent : FIntPoint::ZeroValue))
         {
             bReset = true;
             ResetReason = TEXT("scene guide extent changed");
         }
-        else if (Previous->bDepthAvailable != bDepthAvailable || Previous->bMotionAvailable != (DenseMotion != nullptr))
+        else if (Previous->bDepthAvailable != bUseDepth || Previous->bMotionAvailable != bUseMotion)
         {
             bReset = true;
             ResetReason = TEXT("scene guide availability changed");
@@ -290,12 +300,13 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     FViewHistoryState& CurrentHistory = HistoryByView.FindOrAdd(ViewKey);
     CurrentHistory.bValid = true;
+    CurrentHistory.LastFrame = FrameNumber;
     CurrentHistory.ColorRect = ColorRect;
     CurrentHistory.RenderRect = RenderRect;
-    CurrentHistory.DepthExtent = SceneDepth ? SceneDepth->Desc.Extent : FIntPoint::ZeroValue;
-    CurrentHistory.VelocityExtent = SceneVelocity ? SceneVelocity->Desc.Extent : FIntPoint::ZeroValue;
-    CurrentHistory.bDepthAvailable = bDepthAvailable;
-    CurrentHistory.bMotionAvailable = DenseMotion != nullptr;
+    CurrentHistory.DepthExtent = bUseDepth ? ResolvedDepth->Desc.Extent : FIntPoint::ZeroValue;
+    CurrentHistory.VelocityExtent = bUseMotion ? DenseMotion->Desc.Extent : FIntPoint::ZeroValue;
+    CurrentHistory.bDepthAvailable = bUseDepth;
+    CurrentHistory.bMotionAvailable = bUseMotion;
     CurrentHistory.PreExposure = PreExposure;
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 6
@@ -388,7 +399,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
             RDG_EVENT_NAME("DLSS5NR Native NGX Feature 18 Pass %d/%d", PassIndex + 1, Config.PassCount),
             PassParameters,
             ERDGPassFlags::Compute | ERDGPassFlags::NeverCull,
-            [ThisPassInput, ThisPassOutput, ResolvedDepth, DenseMotion, ColorRect, DepthRect, MotionRect, bUseDepth, bUseMotion, Config, PassIndex](FRHIComputeCommandList& RHICmdList)
+            [ThisPassInput, ThisPassOutput, ResolvedDepth, DenseMotion, ColorRect, DepthRect, MotionRect, bUseDepth, bUseMotion, Config, PassIndex, ViewKey, FrameNumber](FRHIComputeCommandList& RHICmdList)
             {
                 FRHITexture* InputRHI = ThisPassInput->GetRHI();
                 FRHITexture* OutputRHI = ThisPassOutput->GetRHI();
@@ -399,9 +410,10 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                     return;
                 }
 
+                const FGPUFenceRHIRef CompletionFence = RHICreateGPUFence(TEXT("DLSS5NR.EvaluationComplete"));
                 RHICmdList.EnqueueLambda(
                     TEXT("DLSS5NR.NGXEvaluate"),
-                    [InputRHI, OutputRHI, DepthRHI, MotionRHI, ColorRect, DepthRect, MotionRect, Config, PassIndex](FRHICommandListBase& ExecutingCmdList)
+                    [InputRHI, OutputRHI, DepthRHI, MotionRHI, ColorRect, DepthRect, MotionRect, Config, PassIndex, ViewKey, FrameNumber, CompletionFence](FRHICommandListBase& ExecutingCmdList)
                     {
                         ID3D12DynamicRHI* D3D12RHI = GetID3D12DynamicRHI();
                         if (!D3D12RHI)
@@ -411,6 +423,18 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
                         const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(OutputRHI);
                         ID3D12Device* Device = D3D12RHI->RHIGetDevice(DeviceIndex);
+
+                        // UE 5.5 retains its existing RDG transition path; these public
+                        // residency/barrier methods are available from UE 5.6.
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 6)
+                        // Native NGX dispatches bypass UE's normal shader binding path.
+                        // Match NVIDIA's UE integration: register residency and flush RDG barriers.
+                        for (FRHITexture* Texture : {InputRHI, OutputRHI, DepthRHI, MotionRHI})
+                        {
+                            if (Texture) D3D12RHI->RHIUpdateResourceResidency(ExecutingCmdList, DeviceIndex, Texture);
+                        }
+                        D3D12RHI->RHIFlushResourceBarriers(ExecutingCmdList, DeviceIndex);
+#endif
 
                         ID3D12GraphicsCommandList* NativeCmd = D3D12RHI->RHIGetGraphicsCommandList(ExecutingCmdList, DeviceIndex);
                         ID3D12Resource* InputResource = D3D12RHI->RHIGetResource(InputRHI);
@@ -425,12 +449,18 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                         }
 
                         FDLSS5NRRuntime& Runtime = FDLSS5NRRuntime::Get();
+                        // UE can translate separate command lists concurrently; the NGX
+                        // parameter block and feature pool require serialized CPU access.
+                        FScopeLock ExecutionLock(&Runtime.GetExecutionMutex());
                         if (!Runtime.EnsureInitialized(Device))
                         {
                             return;
                         }
 
                         FDLSS5NREvaluateDesc Desc;
+                        Desc.HistoryKey = (static_cast<uint64>(ViewKey) << 32) | static_cast<uint32>(PassIndex);
+                        Desc.FrameNumber = FrameNumber;
+                        Desc.CompletionFence = CompletionFence;
                         Desc.CommandList = NativeCmd;
                         Desc.Color = InputResource;
                         Desc.Output = OutputResource;
@@ -451,8 +481,8 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                         Desc.bDepthInverted = Config.bDepthInverted;
                         Desc.MotionScaleX = Config.MVecScaleX;
                         Desc.MotionScaleY = Config.MVecScaleY;
-                        // Only the first sequential pass owns the frame-level history reset.
-                        Desc.bReset = Config.bReset && PassIndex == 0;
+                        // Each pass owns a separate temporal history and must receive resets.
+                        Desc.bReset = Config.bReset;
                         Desc.JitterPixels = Config.JitterPixels;
                         Desc.PreExposure = Config.PreExposure;
 
@@ -462,6 +492,10 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                         // before the next RDG pass, including the next sequential NR pass.
                         D3D12RHI->RHIFinishExternalComputeWork(ExecutingCmdList, DeviceIndex, NativeCmd);
                     });
+                // Signal after the native work, on the same ordered RHI command list.
+                RHICmdList.WriteGPUFence(CompletionFence);
+                RHICmdList.EnqueueLambda(TEXT("DLSS5NR.KeepFenceAlive"),
+                    [CompletionFence](FRHICommandListBase&) {});
             });
 
         CurrentPassInput = PassOutput;
