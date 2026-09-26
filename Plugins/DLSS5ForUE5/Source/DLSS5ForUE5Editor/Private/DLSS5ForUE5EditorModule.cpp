@@ -47,7 +47,6 @@ namespace
         {
             Settings->PassCount = NewCount;
             Settings->ApplyToCVars();
-            Settings->SaveConfig();
             Settings->RefreshDiagnostics();
         }
     }
@@ -207,6 +206,8 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
 
     if (UDLSS5NRSettings* Settings = GetMutableDefault<UDLSS5NRSettings>())
     {
+        // Show the live CVar state, including values set from DefaultEngine.ini or the console.
+        Settings->LoadFromCVars();
         Settings->RefreshDiagnostics();
         DetailsView->SetObject(Settings);
     }
@@ -433,7 +434,6 @@ FReply FDLSS5ForUE5EditorModule::EnterSafeMode()
         Settings->bFeedSceneGuides = false;
         Settings->bUseMotionVectors = false;
         Settings->ApplyToCVars();
-        Settings->SaveConfig();
         Settings->RefreshDiagnostics();
     }
 

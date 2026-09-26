@@ -275,8 +275,13 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
     const FIntPoint OutputSize = D.OutputRect.Size();
     const bool bUseDepth = D.Depth != nullptr && D.DepthRect.Width() > 0 && D.DepthRect.Height() > 0;
     const bool bUseMotion = D.MotionVectors != nullptr && D.MotionRect.Width() > 0 && D.MotionRect.Height() > 0;
+    const bool bUseMask = D.ControlMask != nullptr && D.MaskRect.Width() > 0 && D.MaskRect.Height() > 0;
+    const bool bUseField = D.DistortionField != nullptr && D.FieldRect.Width() > 0 && D.FieldRect.Height() > 0;
+    const FIntPoint FieldSize = bUseField ? D.FieldRect.Size() : FIntPoint::ZeroValue;
+    const FIntPoint InputSize = D.ColorRect.Size();
     const FIntPoint DepthSize = bUseDepth ? D.DepthRect.Size() : FIntPoint::ZeroValue;
     const FIntPoint MotionSize = bUseMotion ? D.MotionRect.Size() : FIntPoint::ZeroValue;
+    const FIntPoint MaskSize = bUseMask ? D.MaskRect.Size() : FIntPoint::ZeroValue;
 
     if (!bInitialized || !bSnippetPopulated || !CoreParameters || !D.CommandList || OutputSize.X <= 0 || OutputSize.Y <= 0)
     {
@@ -293,8 +298,14 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
         Existing->Preset == D.Preset &&
         Existing->bUsesDepth == bUseDepth &&
         Existing->bUsesMotion == bUseMotion &&
+        Existing->bUsesMask == bUseMask &&
+        Existing->bUsesField == bUseField &&
+        Existing->InputSize == InputSize &&
+        FMath::IsNearlyEqual(Existing->ScalingRatio, D.ScalingRatio, 0.001f) &&
         Existing->DepthSize == DepthSize &&
-        Existing->MotionSize == MotionSize;
+        Existing->MotionSize == MotionSize &&
+        Existing->MaskSize == MaskSize &&
+        Existing->FieldSize == FieldSize;
 
     if (bSameContract)
     {
@@ -339,8 +350,8 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
     P->Set("DLSSNR.OutputHeight", static_cast<unsigned int>(OutputSize.Y));
     P->Set("DLSSNR.Output.Width", static_cast<unsigned int>(OutputSize.X));
     P->Set("DLSSNR.Output.Height", static_cast<unsigned int>(OutputSize.Y));
-    P->Set("DLSSNR.Scale", 1.0f);
-    P->Set("DLSSNR.ScalingRatio", 1.0f);
+    P->Set("DLSSNR.Scale", D.ScalingRatio);
+    P->Set("DLSSNR.ScalingRatio", D.ScalingRatio);
     P->Set("DLSSNR.Hint.Render.Preset", D.Preset);
     P->Set("CreationNodeMask", 1u);
     P->Set("VisibilityNodeMask", 1u);
@@ -374,6 +385,28 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
         SetRect("DLSSNR.MVec", FIntRect());
     }
 
+    if (bUseMask)
+    {
+        P->Set("DLSSNR.ControlMask", D.ControlMask);
+        SetRect("DLSSNR.ControlMask", D.MaskRect);
+    }
+    else if (bParametersHadMask)
+    {
+        P->Set("DLSSNR.ControlMask", static_cast<ID3D12Resource*>(nullptr));
+        SetRect("DLSSNR.ControlMask", FIntRect());
+    }
+
+    if (bUseField)
+    {
+        P->Set("DLSSNR.BidirectionalDistortionField", D.DistortionField);
+        SetRect("DLSSNR.BidirectionalDistortionField", D.FieldRect);
+    }
+    else if (bParametersHadField)
+    {
+        P->Set("DLSSNR.BidirectionalDistortionField", static_cast<ID3D12Resource*>(nullptr));
+        SetRect("DLSSNR.BidirectionalDistortionField", FIntRect());
+    }
+
     P->Set("DLSSNR.MVecScaleX", D.MotionScaleX);
     P->Set("DLSSNR.MVecScaleY", D.MotionScaleY);
     P->Set("DLSSNR.DepthInverted", D.bDepthInverted ? 1 : 0);
@@ -383,6 +416,8 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
     P->Set("Jitter.Offset.Y", 0.0f);
     bParametersHadDepth = bUseDepth;
     bParametersHadMotion = bUseMotion;
+    bParametersHadMask = bUseMask;
+    bParametersHadField = bUseField;
 
     FNGXHandle* NewHandle = nullptr;
     const FNGXResult Result = CreateFeatureFn(D.CommandList, DLSS5NRNGX::NeuralRenderingFeature, P, &NewHandle);
@@ -396,10 +431,11 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
             FailedFeature.CompletionFence = D.CompletionFence;
             RetiredFeatures.Add(MoveTemp(FailedFeature));
         }
-        SetError(FString::Printf(TEXT("DLSS-NR CreateFeature(18) failed at %dx%d preset=%d depth=%s(%dx%d) motion=%s(%dx%d): 0x%08X"),
+        SetError(FString::Printf(TEXT("DLSS-NR CreateFeature(18) failed at %dx%d preset=%d depth=%s(%dx%d) motion=%s(%dx%d) mask=%s(%dx%d): 0x%08X"),
             OutputSize.X, OutputSize.Y, D.Preset,
             bUseDepth ? TEXT("YES") : TEXT("NO"), DepthSize.X, DepthSize.Y,
             bUseMotion ? TEXT("YES") : TEXT("NO"), MotionSize.X, MotionSize.Y,
+            bUseMask ? TEXT("YES") : TEXT("NO"), MaskSize.X, MaskSize.Y,
             Result), Result);
         return nullptr;
     }
@@ -410,17 +446,25 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
     Feature.Preset = D.Preset;
     Feature.bUsesDepth = bUseDepth;
     Feature.bUsesMotion = bUseMotion;
+    Feature.bUsesMask = bUseMask;
+    Feature.bUsesField = bUseField;
+    Feature.InputSize = InputSize;
+    Feature.ScalingRatio = D.ScalingRatio;
+    Feature.FieldSize = FieldSize;
     Feature.DepthSize = DepthSize;
     Feature.MotionSize = MotionSize;
+    Feature.MaskSize = MaskSize;
     Feature.CompletionFence = D.CompletionFence;
     Feature.LastFrame = D.FrameNumber;
     LastError.Reset();
 
     UE_LOG(LogDLSS5, Display,
-        TEXT("Created NGX feature 18 for %dx%d preset=%d depth=%s(%dx%d) motion=%s(%dx%d) handle=%u."),
-        OutputSize.X, OutputSize.Y, D.Preset,
+        TEXT("Created NGX feature 18 for %dx%d (input %dx%d ratio %.3f) preset=%d style=%d depth=%s(%dx%d) motion=%s(%dx%d) mask=%s(%dx%d) field=%s(%dx%d) handle=%u."),
+        OutputSize.X, OutputSize.Y, InputSize.X, InputSize.Y, D.ScalingRatio, D.Preset, D.Style,
         bUseDepth ? TEXT("YES") : TEXT("NO"), DepthSize.X, DepthSize.Y,
         bUseMotion ? TEXT("YES") : TEXT("NO"), MotionSize.X, MotionSize.Y,
+        bUseMask ? TEXT("YES") : TEXT("NO"), MaskSize.X, MaskSize.Y,
+        bUseField ? TEXT("YES") : TEXT("NO"), FieldSize.X, FieldSize.Y,
         Feature.Handle->Id);
     return &Feature;
 }
@@ -499,6 +543,8 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
     P->Set("DLSSNR.Output", D.Output);
     if (D.Depth || bParametersHadDepth) P->Set("DLSSNR.Depth", D.Depth);
     if (D.MotionVectors || bParametersHadMotion) P->Set("DLSSNR.MVec", D.MotionVectors);
+    if (D.ControlMask || bParametersHadMask) P->Set("DLSSNR.ControlMask", D.ControlMask);
+    if (D.DistortionField || bParametersHadField) P->Set("DLSSNR.BidirectionalDistortionField", D.DistortionField);
 
     P->Set("DLSSNR.Width", static_cast<unsigned int>(OutputSize.X));
     P->Set("DLSSNR.Height", static_cast<unsigned int>(OutputSize.Y));
@@ -508,15 +554,19 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
     P->Set("DLSSNR.OutputHeight", static_cast<unsigned int>(OutputSize.Y));
     P->Set("DLSSNR.Output.Width", static_cast<unsigned int>(OutputSize.X));
     P->Set("DLSSNR.Output.Height", static_cast<unsigned int>(OutputSize.Y));
-    P->Set("DLSSNR.Scale", 1.0f);
-    P->Set("DLSSNR.ScalingRatio", 1.0f);
+    P->Set("DLSSNR.Scale", D.ScalingRatio);
+    P->Set("DLSSNR.ScalingRatio", D.ScalingRatio);
 
     SetRect("DLSSNR.Color", D.ColorRect);
     SetRect("DLSSNR.Output", D.OutputRect);
     if (D.Depth || bParametersHadDepth) SetRect("DLSSNR.Depth", D.DepthRect);
     if (D.MotionVectors || bParametersHadMotion) SetRect("DLSSNR.MVec", D.MotionRect);
+    if (D.ControlMask || bParametersHadMask) SetRect("DLSSNR.ControlMask", D.MaskRect);
+    if (D.DistortionField || bParametersHadField) SetRect("DLSSNR.BidirectionalDistortionField", D.FieldRect);
+    bParametersHadField = D.DistortionField != nullptr;
     bParametersHadDepth = D.Depth != nullptr;
     bParametersHadMotion = D.MotionVectors != nullptr;
+    bParametersHadMask = D.ControlMask != nullptr;
 
     P->Set("DLSSNR.MVecScaleX", D.MotionScaleX);
     P->Set("DLSSNR.MVecScaleY", D.MotionScaleY);

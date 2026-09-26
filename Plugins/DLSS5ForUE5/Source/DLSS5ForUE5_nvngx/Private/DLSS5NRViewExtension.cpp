@@ -4,6 +4,9 @@
 #include "DLSS5NRCVars.h"
 #include "DLSS5NRMotionVectorPass.h"
 #include "DLSS5NRRuntime.h"
+#include "DLSS5NRSettings.h"
+#include "Engine/Texture.h"
+#include "TextureResource.h"
 
 #include "RenderGraphBuilder.h"
 #include "RenderGraphResources.h"
@@ -40,12 +43,15 @@ namespace
         float MVecScaleY = 1.0f;
         FVector2f JitterPixels = FVector2f::ZeroVector;
         float PreExposure = 1.0f;
+        float ScalingRatio = 1.0f;
     };
 
     BEGIN_SHADER_PARAMETER_STRUCT(FDLSS5NRExternalPassParameters, )
         RDG_TEXTURE_ACCESS(InputColor, ERHIAccess::SRVCompute)
         RDG_TEXTURE_ACCESS(InputDepth, ERHIAccess::SRVCompute)
         RDG_TEXTURE_ACCESS(InputMotion, ERHIAccess::SRVCompute)
+        RDG_TEXTURE_ACCESS(InputMask, ERHIAccess::SRVCompute)
+        RDG_TEXTURE_ACCESS(InputField, ERHIAccess::SRVCompute)
         RDG_TEXTURE_ACCESS(OutputColor, ERHIAccess::UAVCompute)
     END_SHADER_PARAMETER_STRUCT()
 
@@ -111,6 +117,30 @@ FDLSS5NRViewExtension::FDLSS5NRViewExtension(const FAutoRegister& AutoRegister)
 {
 }
 
+void FDLSS5NRViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
+{
+    FTextureResource* Resource = nullptr;
+    if (const UDLSS5NRSettings* Settings = GetDefault<UDLSS5NRSettings>())
+    {
+        UTexture* Texture = Settings->DistortionFieldTexture.Get();
+        if (Texture != DistortionFieldKeepAlive.Get())
+        {
+            DistortionFieldKeepAlive.Reset(Texture);
+        }
+        if (Texture)
+        {
+            Resource = Texture->GetResource();
+        }
+    }
+
+    // FTextureResource is released through a later render command, so reading TextureRHI here is ordered.
+    TSharedRef<FDLSS5NRViewExtension, ESPMode::ThreadSafe> Self = StaticCastSharedRef<FDLSS5NRViewExtension>(AsShared());
+    ENQUEUE_RENDER_COMMAND(DLSS5NRDistortionField)([Self, Resource](FRHICommandListImmediate&)
+    {
+        Self->DistortionFieldRHI = Resource ? Resource->TextureRHI : nullptr;
+    });
+}
+
 void FDLSS5NRViewExtension::SubscribeToPostProcessingPass(
     EPostProcessingPass Pass,
     const FSceneView& InView,
@@ -171,6 +201,8 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
         return SceneColor;
     }
 
+    FDLSS5NRFrameConfig Config;
+
     // The scene guide buffers belong to the primary render view. With DLSS/TSR active this may
     // be lower resolution than the post-upscale color rect, so keep independent subrects.
     const FIntRect RenderRect = static_cast<const FViewInfo&>(View).ViewRect;
@@ -181,12 +213,14 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     FRDGTextureRef SceneDepth = nullptr;
     FRDGTextureRef SceneVelocity = nullptr;
+    FRDGTextureSRVRef CustomStencil = nullptr;
     if (TRDGUniformBuffer<FSceneTextureUniformParameters>* SceneTextureUB = Inputs.SceneTextures.SceneTextures.GetUniformBuffer())
     {
         if (const FSceneTextureUniformParameters* SceneTextureContents = SceneTextureUB->GetContents())
         {
             SceneDepth = SceneTextureContents->SceneDepthTexture;
             SceneVelocity = SceneTextureContents->GBufferVelocityTexture;
+            CustomStencil = SceneTextureContents->CustomStencilTexture;
         }
     }
 
@@ -206,11 +240,25 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
         ? ClampRectToExtent(RenderRect, SceneDepth->Desc.Extent)
         : FIntRect();
 
+    // Experimental scaling ratio. Mode 0 hands NR a downscaled input (and guides) and lets it
+    // produce the full-size output, DLSS-style. Mode 1 keeps the full input and only sets the hint.
+    Config.ScalingRatio = FMath::Clamp(DLSS5NR::GetScalingRatio(), 0.25f, 1.0f);
+    const bool bScaledInput = Config.ScalingRatio < 0.999f && DLSS5NR::GetScalingRatioMode() == 0;
+    const FIntRect InputRect = bScaledInput
+        ? FIntRect(FIntPoint::ZeroValue, FIntPoint(
+            FMath::Max(1, FMath::RoundToInt(ColorRect.Width() * Config.ScalingRatio)),
+            FMath::Max(1, FMath::RoundToInt(ColorRect.Height() * Config.ScalingRatio))))
+        : ColorRect;
+
+    // Guides are resolved at the NR input resolution so NR receives a same-resolution
+    // colour/depth/motion contract, the way every working DLSS-NR feeder supplies it.
+    const FIntPoint GuideSize = InputRect.Size();
+
     FRDGTextureRef ResolvedDepth = nullptr;
     FIntRect DepthRect;
     if (bDepthRequested && bDepthAvailable && GuideSourceRect.Width() > 0 && GuideSourceRect.Height() > 0)
     {
-        ResolvedDepth = AddDLSS5NRDepthResolvePass(GraphBuilder, View, SceneDepth, GuideSourceRect);
+        ResolvedDepth = AddDLSS5NRDepthResolvePass(GraphBuilder, View, SceneDepth, GuideSourceRect, GuideSize);
         if (ResolvedDepth)
         {
             DepthRect = FIntRect(FIntPoint::ZeroValue, ResolvedDepth->Desc.Extent);
@@ -223,15 +271,39 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
         GuideSourceRect.Width() > 0 && GuideSourceRect.Height() > 0)
     {
         DenseMotion = AddDLSS5NRMotionVectorResolvePass(
-            GraphBuilder, View, SceneDepth, SceneVelocity, GuideSourceRect);
+            GraphBuilder, View, SceneDepth, SceneVelocity, GuideSourceRect, GuideSize);
         if (DenseMotion)
         {
             MotionRect = FIntRect(FIntPoint::ZeroValue, DenseMotion->Desc.Extent);
         }
     }
 
-    const bool bDepthCompatible = ResolvedDepth && IsGuideOutputCompatible(ResolvedDepth->Desc.Extent, ColorRect.Size());
-    const bool bMotionCompatible = DenseMotion && IsGuideOutputCompatible(DenseMotion->Desc.Extent, ColorRect.Size());
+    // Experimental control mask from custom depth stencil. Only meaningful alongside the guides.
+    FRDGTextureRef ControlMask = nullptr;
+    FIntRect MaskRect;
+    const int32 MaskStencil = DLSS5NR::GetControlMaskStencil();
+    if (bFeedSceneGuides && MaskStencil != 0 && GuideSourceRect.Width() > 0 && GuideSourceRect.Height() > 0)
+    {
+        ControlMask = AddDLSS5NRControlMaskResolvePass(
+            GraphBuilder, View, CustomStencil, GuideSourceRect, GuideSize,
+            FMath::Clamp(MaskStencil, -1, 255), DLSS5NR::GetControlMaskInvert() != 0);
+        if (ControlMask)
+        {
+            MaskRect = FIntRect(FIntPoint::ZeroValue, ControlMask->Desc.Extent);
+        }
+    }
+
+    // Optional lens-distortion field supplied by the project (see r.DLSS5.DistortionFieldTexture).
+    FRDGTextureRef DistortionField = nullptr;
+    FIntRect FieldRect;
+    if (bFeedSceneGuides && DistortionFieldRHI.IsValid())
+    {
+        DistortionField = RegisterExternalTexture(GraphBuilder, DistortionFieldRHI, TEXT("DLSS5NR.DistortionField"));
+        FieldRect = FIntRect(FIntPoint::ZeroValue, DistortionField->Desc.Extent);
+    }
+
+    const bool bDepthCompatible = ResolvedDepth && IsGuideOutputCompatible(ResolvedDepth->Desc.Extent, InputRect.Size());
+    const bool bMotionCompatible = DenseMotion && IsGuideOutputCompatible(DenseMotion->Desc.Extent, InputRect.Size());
     const bool bUseDepth = bFeedSceneGuides && bDepthCompatible;
     const bool bUseMotion = bFeedSceneGuides && bMotionCompatible;
 
@@ -328,28 +400,26 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     AddDrawTexturePass(GraphBuilder, ViewInfo, SceneColor, NRInputScreen);
 
-    FDLSS5NRFrameConfig Config;
     Config.Preset = FMath::Clamp(DLSS5NR::GetPreset(), 0, 3);
-    Config.PassCount = FMath::Clamp(DLSS5NR::GetPassCount(), 1, 4);
+    // Style 0..2 (default/natural/cinematic). Feature creation keys on Preset; Style is per-evaluate.
+    // A scaled input only makes sense for the first pass; later passes would need a second downscale.
+    Config.PassCount = bScaledInput ? 1 : FMath::Clamp(DLSS5NR::GetPassCount(), 1, 4);
     Config.Intensity = DLSS5NR::GetIntensity();
     Config.LocalTone = DLSS5NR::GetLocalTone();
     Config.LocalStructure = DLSS5NR::GetLocalStructure();
     Config.SkinStructure = DLSS5NR::GetSkinStructure();
     Config.bAutoMask = DLSS5NR::GetAutoMask() != 0;
-    Config.Style = DLSS5NR::GetStyle();
+    Config.Style = FMath::Clamp(DLSS5NR::GetStyle(), 0, 2);
     Config.bUICorrection = DLSS5NR::GetUICorrection() != 0;
     Config.bDepthInverted = DLSS5NR::GetDepthInverted() != 0;
     Config.bReset = bReset;
     Config.JitterPixels = JitterPixels;
     Config.PreExposure = PreExposure;
 
-    // Dense motion output is in pixels. Normalize by its own render-resolution dimensions,
-    // then apply the user multiplier for debugging unusual conventions.
-    if (DenseMotion && DenseMotion->Desc.Extent.X > 0 && DenseMotion->Desc.Extent.Y > 0)
-    {
-        Config.MVecScaleX = (1.0f / static_cast<float>(DenseMotion->Desc.Extent.X)) * DLSS5NR::GetMVecScaleX();
-        Config.MVecScaleY = (1.0f / static_cast<float>(DenseMotion->Desc.Extent.Y)) * DLSS5NR::GetMVecScaleY();
-    }
+    // Dense motion output is already in display pixels, which is the NGX convention with a unit
+    // scale (NVIDIA's UE DLSS plugin sets MotionVectorScale = 1). The CVar is a debug multiplier only.
+    Config.MVecScaleX = DLSS5NR::GetMVecScaleX();
+    Config.MVecScaleY = DLSS5NR::GetMVecScaleY();
 
     FDLSS5NRFrameTelemetry Telemetry;
     Telemetry.bDepthAvailable = bDepthAvailable;
@@ -376,13 +446,24 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
     // each additional pass consumes the previous NR output. Every output is prefilled from
     // its input so an NGX failure degrades to pass-through instead of black.
     FRDGTextureRef CurrentPassInput = NRInput;
+    FIntRect CurrentInputRect = ColorRect;
     FRDGTextureRef FinalNROutput = NRInput;
+
+    if (bScaledInput)
+    {
+        // Point-sampled downscale into the top-left of a same-extent proxy. ponytail: bilinear/box
+        // filter if the scaled path proves useful.
+        FRDGTextureRef ScaledInput = GraphBuilder.CreateTexture(ProxyDesc, TEXT("DLSS5NR.InputScaledFP16"));
+        AddDrawTexturePass(GraphBuilder, ViewInfo, NRInputScreen, FScreenPassTexture(ScaledInput, InputRect));
+        CurrentPassInput = ScaledInput;
+        CurrentInputRect = InputRect;
+    }
 
     for (int32 PassIndex = 0; PassIndex < Config.PassCount; ++PassIndex)
     {
         FRDGTextureRef PassOutput = GraphBuilder.CreateTexture(ProxyDesc, TEXT("DLSS5NR.PassOutputFP16"));
 
-        const FScreenPassTexture CurrentInputScreen(CurrentPassInput, ColorRect);
+        const FScreenPassTexture CurrentInputScreen(CurrentPassInput, CurrentInputRect);
         const FScreenPassTexture PassOutputScreen(PassOutput, ColorRect);
         AddDrawTexturePass(GraphBuilder, ViewInfo, CurrentInputScreen, PassOutputScreen);
 
@@ -390,6 +471,8 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
         PassParameters->InputColor = CurrentPassInput;
         PassParameters->InputDepth = bUseDepth ? ResolvedDepth : nullptr;
         PassParameters->InputMotion = bUseMotion ? DenseMotion : nullptr;
+        PassParameters->InputMask = ControlMask;
+        PassParameters->InputField = DistortionField;
         PassParameters->OutputColor = PassOutput;
 
         FRDGTextureRef ThisPassInput = CurrentPassInput;
@@ -399,12 +482,14 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
             RDG_EVENT_NAME("DLSS5NR Native NGX Feature 18 Pass %d/%d", PassIndex + 1, Config.PassCount),
             PassParameters,
             ERDGPassFlags::Compute | ERDGPassFlags::NeverCull,
-            [ThisPassInput, ThisPassOutput, ResolvedDepth, DenseMotion, ColorRect, DepthRect, MotionRect, bUseDepth, bUseMotion, Config, PassIndex, ViewKey, FrameNumber](FRHIComputeCommandList& RHICmdList)
+            [ThisPassInput, ThisPassOutput, ResolvedDepth, DenseMotion, ControlMask, DistortionField, CurrentInputRect, ColorRect, DepthRect, MotionRect, MaskRect, FieldRect, bUseDepth, bUseMotion, Config, PassIndex, ViewKey, FrameNumber](FRHIComputeCommandList& RHICmdList)
             {
                 FRHITexture* InputRHI = ThisPassInput->GetRHI();
                 FRHITexture* OutputRHI = ThisPassOutput->GetRHI();
                 FRHITexture* DepthRHI = bUseDepth && ResolvedDepth ? ResolvedDepth->GetRHI() : nullptr;
                 FRHITexture* MotionRHI = bUseMotion && DenseMotion ? DenseMotion->GetRHI() : nullptr;
+                FRHITexture* MaskRHI = ControlMask ? ControlMask->GetRHI() : nullptr;
+                FRHITexture* FieldRHI = DistortionField ? DistortionField->GetRHI() : nullptr;
                 if (!InputRHI || !OutputRHI)
                 {
                     return;
@@ -413,7 +498,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                 const FGPUFenceRHIRef CompletionFence = RHICreateGPUFence(TEXT("DLSS5NR.EvaluationComplete"));
                 RHICmdList.EnqueueLambda(
                     TEXT("DLSS5NR.NGXEvaluate"),
-                    [InputRHI, OutputRHI, DepthRHI, MotionRHI, ColorRect, DepthRect, MotionRect, Config, PassIndex, ViewKey, FrameNumber, CompletionFence](FRHICommandListBase& ExecutingCmdList)
+                    [InputRHI, OutputRHI, DepthRHI, MotionRHI, MaskRHI, FieldRHI, CurrentInputRect, ColorRect, DepthRect, MotionRect, MaskRect, FieldRect, Config, PassIndex, ViewKey, FrameNumber, CompletionFence](FRHICommandListBase& ExecutingCmdList)
                     {
                         ID3D12DynamicRHI* D3D12RHI = GetID3D12DynamicRHI();
                         if (!D3D12RHI)
@@ -429,7 +514,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 #if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 6)
                         // Native NGX dispatches bypass UE's normal shader binding path.
                         // Match NVIDIA's UE integration: register residency and flush RDG barriers.
-                        for (FRHITexture* Texture : {InputRHI, OutputRHI, DepthRHI, MotionRHI})
+                        for (FRHITexture* Texture : {InputRHI, OutputRHI, DepthRHI, MotionRHI, MaskRHI, FieldRHI})
                         {
                             if (Texture) D3D12RHI->RHIUpdateResourceResidency(ExecutingCmdList, DeviceIndex, Texture);
                         }
@@ -441,6 +526,8 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                         ID3D12Resource* OutputResource = D3D12RHI->RHIGetResource(OutputRHI);
                         ID3D12Resource* DepthResource = DepthRHI ? D3D12RHI->RHIGetResource(DepthRHI) : nullptr;
                         ID3D12Resource* MotionResource = MotionRHI ? D3D12RHI->RHIGetResource(MotionRHI) : nullptr;
+                        ID3D12Resource* MaskResource = MaskRHI ? D3D12RHI->RHIGetResource(MaskRHI) : nullptr;
+                        ID3D12Resource* FieldResource = FieldRHI ? D3D12RHI->RHIGetResource(FieldRHI) : nullptr;
 
                         if (!Device || !NativeCmd || !InputResource || !OutputResource)
                         {
@@ -466,10 +553,15 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
                         Desc.Output = OutputResource;
                         Desc.Depth = DepthResource;
                         Desc.MotionVectors = MotionResource;
-                        Desc.ColorRect = ColorRect;
+                        Desc.ControlMask = MaskResource;
+                        Desc.DistortionField = FieldResource;
+                        Desc.ColorRect = CurrentInputRect;
                         Desc.OutputRect = ColorRect;
                         Desc.DepthRect = DepthRect;
                         Desc.MotionRect = MotionRect;
+                        Desc.MaskRect = MaskRect;
+                        Desc.FieldRect = FieldRect;
+                        Desc.ScalingRatio = Config.ScalingRatio;
                         Desc.Preset = Config.Preset;
                         Desc.Intensity = Config.Intensity;
                         Desc.LocalTone = Config.LocalTone;
@@ -499,8 +591,14 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
             });
 
         CurrentPassInput = PassOutput;
+        CurrentInputRect = ColorRect;
         FinalNROutput = PassOutput;
     }
+
+    // Keep tonemapped highlights (lights, emissive panels) and the tonemapper alpha.
+    FinalNROutput = AddDLSS5NRHighlightPreservePass(
+        GraphBuilder, View, NRInput, FinalNROutput, ColorRect,
+        DLSS5NR::GetHighlightPreserveStart(), DLSS5NR::GetHighlightPreserveEnd());
 
     const FScreenPassTexture NROutputScreen(FinalNROutput, ColorRect);
 

@@ -2,15 +2,22 @@
 #include "/Engine/Private/Common.ush"
 
 // Dense UE motion-vector guide resolve for NVIDIA DLSS-NR.
-// Output units are pixels. The NGX MVecScaleX/Y values normalize by this guide's extent.
+//
+// Runs at the NR colour (display) resolution so the guide matches the post-upscale colour input,
+// sampling the render-resolution depth/velocity textures. Output units are display pixels,
+// previous-minus-current, +Y down: the convention NVIDIA's own UE DLSS plugin hands NGX with a
+// unit MVScale (see Plugins/Nvidia/DLSS/Shaders/Private/VelocityCombine.usf).
 
 Texture2D<float> DepthTexture;
 Texture2D<float4> VelocityTexture;
 int2 SourceRectMin;
 int2 SourceRectSize;
+int2 OutputSize;
 uint HasObjectVelocity;
 RWTexture2D<float2> OutputMotionVectors;
 
+// UE encodes screen velocity so clear=(0,0) remains an invalid/no-object marker. Kept local
+// because the engine helper signature has changed across UE revisions.
 float2 DLSS5NRDecodeVelocityXY(float4 EncodedVelocity)
 {
     const float InvDiv = 1.0f / (0.499f * 0.5f);
@@ -21,16 +28,18 @@ float2 DLSS5NRDecodeVelocityXY(float4 EncodedVelocity)
 [numthreads(8, 8, 1)]
 void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
-    const uint2 LocalPixel = DispatchThreadId.xy;
-    if (LocalPixel.x >= (uint)SourceRectSize.x || LocalPixel.y >= (uint)SourceRectSize.y)
+    const uint2 OutPixel = DispatchThreadId.xy;
+    if (OutPixel.x >= (uint)OutputSize.x || OutPixel.y >= (uint)OutputSize.y)
     {
         return;
     }
 
-    const int2 SourcePixel = int2(LocalPixel) + SourceRectMin;
+    // Map the display pixel to the render-resolution scene textures (nearest).
+    const float2 ViewportUV = (float2(OutPixel) + 0.5f) / float2(OutputSize);
+    const int2 SourcePixel = SourceRectMin + min(int2(ViewportUV * float2(SourceRectSize)), SourceRectSize - 1);
     const float DeviceDepth = DepthTexture.Load(int3(SourcePixel, 0)).r;
 
-    const float2 ViewportUV = (float2(LocalPixel) + 0.5f) / float2(SourceRectSize);
+    // ClipToPrevClip expects the active view's clip space, which is resolution independent.
     const float2 CurrentClipXY = float2(ViewportUV.x * 2.0f - 1.0f,
                                        1.0f - ViewportUV.y * 2.0f);
 
@@ -60,7 +69,8 @@ void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
         }
     }
 
-    const float2 VelocityPixels = VelocityClip * float2(0.5f, -0.5f) * float2(SourceRectSize);
-    // UE velocity is current minus previous; NGX expects previous minus current.
-    OutputMotionVectors[LocalPixel] = -VelocityPixels;
+    // UE velocity is current minus previous; NGX expects previous minus current, in pixels of
+    // the texture being reprojected (the display-resolution colour).
+    const float2 VelocityPixels = VelocityClip * float2(0.5f, -0.5f) * float2(OutputSize);
+    OutputMotionVectors[OutPixel] = -VelocityPixels;
 }

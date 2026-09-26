@@ -19,11 +19,16 @@ struct FDLSS5NREvaluateDesc
     ID3D12Resource* Output = nullptr;
     ID3D12Resource* Depth = nullptr;
     ID3D12Resource* MotionVectors = nullptr;
+    ID3D12Resource* ControlMask = nullptr;
+    ID3D12Resource* DistortionField = nullptr;
 
     FIntRect ColorRect;
     FIntRect OutputRect;
     FIntRect DepthRect;
     FIntRect MotionRect;
+    FIntRect MaskRect;
+    FIntRect FieldRect;
+    float ScalingRatio = 1.0f;
 
     float MotionScaleX = 1.0f;
     float MotionScaleY = 1.0f;
@@ -100,8 +105,14 @@ private:
         int32 Preset = INDEX_NONE;
         bool bUsesDepth = false;
         bool bUsesMotion = false;
+        bool bUsesMask = false;
+        bool bUsesField = false;
+        FIntPoint InputSize = FIntPoint::ZeroValue;
+        float ScalingRatio = 1.0f;
+        FIntPoint FieldSize = FIntPoint::ZeroValue;
         FIntPoint DepthSize = FIntPoint::ZeroValue;
         FIntPoint MotionSize = FIntPoint::ZeroValue;
+        FIntPoint MaskSize = FIntPoint::ZeroValue;
         bool bNeedsReset = true;
         uint64 LastFrame = 0;
         FGPUFenceRHIRef CompletionFence;
@@ -139,6 +150,8 @@ private:
     // Parameter bindings belong to the shared CPU parameter block, not a view.
     bool bParametersHadDepth = false;
     bool bParametersHadMotion = false;
+    bool bParametersHadMask = false;
+    bool bParametersHadField = false;
     FIntPoint FeatureSize = FIntPoint::ZeroValue;
     bool bInitialized = false;
     bool bSnippetPopulated = false;

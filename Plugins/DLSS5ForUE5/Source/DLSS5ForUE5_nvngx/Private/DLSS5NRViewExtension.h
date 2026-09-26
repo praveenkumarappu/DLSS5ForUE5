@@ -5,6 +5,9 @@
 #include "ScreenPass.h"
 #include "PostProcess/PostProcessMaterialInputs.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "UObject/StrongObjectPtr.h"
+
+class UTexture;
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 6
 using FDLSS5NRPostProcessDelegateArray = FAfterPassCallbackDelegateArray;
@@ -23,8 +26,9 @@ public:
     // no-op overrides on pre-5.6 builds.
     virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {}
     virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {}
-    virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override {}
 #endif
+    // Game thread: hands the optional distortion-field texture to the render thread.
+    virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
 
     virtual void SubscribeToPostProcessingPass(
         EPostProcessingPass Pass,
@@ -52,4 +56,6 @@ private:
         const FPostProcessMaterialInputs& Inputs);
 
     TMap<uint32, FViewHistoryState> HistoryByView;
+    FTextureRHIRef DistortionFieldRHI; // render thread
+    TStrongObjectPtr<UTexture> DistortionFieldKeepAlive; // game thread
 };

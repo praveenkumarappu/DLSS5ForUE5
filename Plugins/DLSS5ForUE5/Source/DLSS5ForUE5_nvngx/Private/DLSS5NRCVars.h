@@ -23,5 +23,12 @@ namespace DLSS5NR
     extern float GetMVecScaleX();
     extern float GetMVecScaleY();
     extern float GetExposureResetRatio();
+    extern FString GetDistortionFieldTexture(); // game thread
+    extern float GetScalingRatio();
+    extern int32 GetScalingRatioMode();
+    extern int32 GetControlMaskStencil();
+    extern int32 GetControlMaskInvert();
+    extern float GetHighlightPreserveStart();
+    extern float GetHighlightPreserveEnd();
     extern int32 GetDebug();
 }

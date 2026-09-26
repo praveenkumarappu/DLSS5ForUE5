@@ -1,7 +1,9 @@
 #include "DLSS5NRSettings.h"
 
 #include "DLSS5NRRuntime.h"
+#include "Engine/Texture.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/UObjectGlobals.h"
 
 #define LOCTEXT_NAMESPACE "DLSS5NRSettings"
 
@@ -11,7 +13,8 @@ namespace
     {
         if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
         {
-            CVar->Set(Value, ECVF_SetByProjectSetting);
+            // Console priority so window edits win over ini and earlier console sets.
+            CVar->Set(Value, ECVF_SetByConsole);
         }
     }
 
@@ -19,8 +22,34 @@ namespace
     {
         if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
         {
-            CVar->Set(Value, ECVF_SetByProjectSetting);
+            CVar->Set(Value, ECVF_SetByConsole);
         }
+    }
+
+    void SetStringCVar(const TCHAR* Name, const FString& Value)
+    {
+        if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
+        {
+            CVar->Set(*Value, ECVF_SetByConsole);
+        }
+    }
+
+    FString GetStringCVar(const TCHAR* Name)
+    {
+        const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name);
+        return CVar ? CVar->GetString() : FString();
+    }
+
+    int32 GetIntCVar(const TCHAR* Name, int32 Default)
+    {
+        const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name);
+        return CVar ? CVar->GetInt() : Default;
+    }
+
+    float GetFloatCVar(const TCHAR* Name, float Default)
+    {
+        const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name);
+        return CVar ? CVar->GetFloat() : Default;
     }
 
     FString RectToString(const FIntRect& Rect)
@@ -56,12 +85,55 @@ void UDLSS5NRSettings::ApplyToCVars() const
     SetIntCVar(TEXT("r.DLSS5.FeedSceneGuides"), bFeedSceneGuides ? 1 : 0);
     SetIntCVar(TEXT("r.DLSS5.UseDepth"), bUseDepth ? 1 : 0);
     SetIntCVar(TEXT("r.DLSS5.UseMotionVectors"), bUseMotionVectors ? 1 : 0);
+    SetIntCVar(TEXT("r.DLSS5.ControlMaskStencil"), FMath::Clamp(ControlMaskStencil, -1, 255));
+    SetIntCVar(TEXT("r.DLSS5.ControlMaskInvert"), bControlMaskInvert ? 1 : 0);
+    SetStringCVar(TEXT("r.DLSS5.DistortionFieldTexture"), DistortionFieldTexture.IsNull() ? FString() : DistortionFieldTexture.ToString());
+    SetFloatCVar(TEXT("r.DLSS5.ScalingRatio"), FMath::Clamp(ScalingRatio, 0.25f, 1.0f));
+    SetIntCVar(TEXT("r.DLSS5.ScalingRatioMode"), FMath::Clamp(ScalingRatioMode, 0, 1));
     SetIntCVar(TEXT("r.DLSS5.AutoResetHistory"), bAutoResetHistory ? 1 : 0);
     SetIntCVar(TEXT("r.DLSS5.DepthInverted"), bDepthInverted ? 1 : 0);
     SetFloatCVar(TEXT("r.DLSS5.MVecScaleX"), MotionScaleXMultiplier);
     SetFloatCVar(TEXT("r.DLSS5.MVecScaleY"), MotionScaleYMultiplier);
     SetFloatCVar(TEXT("r.DLSS5.ExposureResetRatio"), ExposureResetRatio);
+    SetFloatCVar(TEXT("r.DLSS5.HighlightPreserveStart"), HighlightPreserveStart);
+    SetFloatCVar(TEXT("r.DLSS5.HighlightPreserveEnd"), HighlightPreserveEnd);
     SetIntCVar(TEXT("r.DLSS5.Debug"), bVerboseDiagnostics ? 1 : 0);
+}
+
+void UDLSS5NRSettings::LoadFromCVars()
+{
+    bEnableNeuralRendering = GetIntCVar(TEXT("r.DLSS5.Enable"), 0) != 0;
+    Style = static_cast<EDLSS5NRStyle>(FMath::Clamp(GetIntCVar(TEXT("r.DLSS5.Style"), 0), 0, 2));
+    Preset = FMath::Clamp(GetIntCVar(TEXT("r.DLSS5.Preset"), 1), 0, 3);
+    PassCount = FMath::Clamp(GetIntCVar(TEXT("r.DLSS5.PassCount"), 1), 1, 4);
+    Intensity = GetFloatCVar(TEXT("r.DLSS5.Intensity"), 1.0f);
+    LocalTone = GetFloatCVar(TEXT("r.DLSS5.LocalTone"), 1.0f);
+    LocalStructure = GetFloatCVar(TEXT("r.DLSS5.LocalStructure"), 1.0f);
+    SkinStructure = GetFloatCVar(TEXT("r.DLSS5.SkinStructure"), 1.0f);
+    bAutoMask = GetIntCVar(TEXT("r.DLSS5.AutoMask"), 1) != 0;
+    bUICorrection = GetIntCVar(TEXT("r.DLSS5.UICorrection"), 0) != 0;
+    bEnableSceneGuides = GetIntCVar(TEXT("r.DLSS5.EnableSceneGuides"), 0) != 0;
+    bFeedSceneGuides = GetIntCVar(TEXT("r.DLSS5.FeedSceneGuides"), 0) != 0;
+    bUseDepth = GetIntCVar(TEXT("r.DLSS5.UseDepth"), 1) != 0;
+    bUseMotionVectors = GetIntCVar(TEXT("r.DLSS5.UseMotionVectors"), 0) != 0;
+    ControlMaskStencil = FMath::Clamp(GetIntCVar(TEXT("r.DLSS5.ControlMaskStencil"), 0), -1, 255);
+    bControlMaskInvert = GetIntCVar(TEXT("r.DLSS5.ControlMaskInvert"), 0) != 0;
+    const FString FieldPath = GetStringCVar(TEXT("r.DLSS5.DistortionFieldTexture"));
+    DistortionFieldTexture = FieldPath.IsEmpty() ? TSoftObjectPtr<UTexture>() : TSoftObjectPtr<UTexture>(FSoftObjectPath(FieldPath));
+    if (!DistortionFieldTexture.IsNull())
+    {
+        DistortionFieldTexture.LoadSynchronous();
+    }
+    ScalingRatio = FMath::Clamp(GetFloatCVar(TEXT("r.DLSS5.ScalingRatio"), 1.0f), 0.25f, 1.0f);
+    ScalingRatioMode = FMath::Clamp(GetIntCVar(TEXT("r.DLSS5.ScalingRatioMode"), 0), 0, 1);
+    bAutoResetHistory = GetIntCVar(TEXT("r.DLSS5.AutoResetHistory"), 1) != 0;
+    bDepthInverted = GetIntCVar(TEXT("r.DLSS5.DepthInverted"), 1) != 0;
+    MotionScaleXMultiplier = GetFloatCVar(TEXT("r.DLSS5.MVecScaleX"), 1.0f);
+    MotionScaleYMultiplier = GetFloatCVar(TEXT("r.DLSS5.MVecScaleY"), 1.0f);
+    ExposureResetRatio = GetFloatCVar(TEXT("r.DLSS5.ExposureResetRatio"), 2.0f);
+    HighlightPreserveStart = GetFloatCVar(TEXT("r.DLSS5.HighlightPreserveStart"), 0.7f);
+    HighlightPreserveEnd = GetFloatCVar(TEXT("r.DLSS5.HighlightPreserveEnd"), 0.9f);
+    bVerboseDiagnostics = GetIntCVar(TEXT("r.DLSS5.Debug"), 1) != 0;
 }
 
 #if WITH_EDITOR
@@ -69,7 +141,6 @@ void UDLSS5NRSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 {
     Super::PostEditChangeProperty(PropertyChangedEvent);
     ApplyToCVars();
-    SaveConfig();
 }
 #endif
 
