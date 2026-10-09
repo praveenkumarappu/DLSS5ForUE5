@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Object velocity is decoded with the engine's `DecodeVelocityFromTexture`. UE 5.x gamma-encodes velocity on SM5+, and the previous linear unpack inflated small motion by an order of magnitude, so animated characters never settled while static geometry (camera reprojection) was stable.
 - Motion-vector guide is now handed to NGX in display-pixel units with a unit scale, matching NVIDIA's UE DLSS plugin. It was normalised by the guide width, so NR received near-zero motion and history blended unaligned under camera movement.
 - Depth and motion guides are resolved at the NR colour resolution instead of the render resolution.
 - Added a highlight-preserve blend (`r.DLSS5.HighlightPreserveStart/End`) that keeps tonemapped brightness for lights and emissive surfaces and restores the tonemapper alpha.

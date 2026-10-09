@@ -16,15 +16,6 @@ int2 OutputSize;
 uint HasObjectVelocity;
 RWTexture2D<float2> OutputMotionVectors;
 
-// UE encodes screen velocity so clear=(0,0) remains an invalid/no-object marker. Kept local
-// because the engine helper signature has changed across UE revisions.
-float2 DLSS5NRDecodeVelocityXY(float4 EncodedVelocity)
-{
-    const float InvDiv = 1.0f / (0.499f * 0.5f);
-    const float Bias = 32767.0f / 65535.0f;
-    return EncodedVelocity.xy * InvDiv - Bias * InvDiv;
-}
-
 [numthreads(8, 8, 1)]
 void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -55,7 +46,9 @@ void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 
     if (bUseObjectVelocity)
     {
-        VelocityClip = DLSS5NRDecodeVelocityXY(EncodedVelocity);
+        // Use the engine decoder: UE 5.x stores velocity gamma-encoded (sqrt) on SM5+, and a linear
+        // unpack turns an idle character's sub-pixel motion into tens of pixels.
+        VelocityClip = DecodeVelocityFromTexture(EncodedVelocity).xy;
     }
     else
     {
