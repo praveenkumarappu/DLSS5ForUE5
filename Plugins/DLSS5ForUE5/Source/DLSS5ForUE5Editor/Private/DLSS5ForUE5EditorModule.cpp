@@ -407,7 +407,7 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
                     .AutoHeight()
                     [
                         SNew(STextBlock)
-                        .Text(FText::FromString(FString::Printf(TEXT("Version: 0.6.0 Stable  |  Build: %s"), DLSS5BuildStamp)))
+                        .Text(FText::FromString(FString::Printf(TEXT("Version: 0.6.1 (scragnog fork)  |  Build: %s"), DLSS5BuildStamp)))
                     ]
                 ]
             ]

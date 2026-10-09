@@ -8,7 +8,7 @@ static TAutoConsoleVariable<int32> CVarDLSS5NREnable(
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPreset(
     TEXT("r.DLSS5.Preset"), 1,
-    TEXT("DLSS-NR render preset hint, 0..3. Selects the network weights; 3 is NVIDIA's reference default."),
+    TEXT("DLSS-NR render preset hint, 0..3. No effect with the 310.8 runtime, which embeds a single network; kept for future builds. Changing it rebuilds the feature."),
     ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPassCount(

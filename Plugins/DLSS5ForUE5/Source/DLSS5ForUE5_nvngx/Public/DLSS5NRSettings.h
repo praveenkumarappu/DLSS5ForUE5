@@ -47,7 +47,7 @@ public:
     UPROPERTY(EditAnywhere, Config, Category = "General", meta = (ToolTip = "Network style. Changing it resets NR temporal history."))
     EDLSS5NRStyle Style = EDLSS5NRStyle::Default;
 
-    UPROPERTY(EditAnywhere, Config, Category = "General", meta = (ClampMin = "0", ClampMax = "3", UIMin = "0", UIMax = "3", DisplayName = "NR Preset", ToolTip = "Selects the network weights (0..3). NVIDIA's reference default is 3. Changing it rebuilds the feature."))
+    UPROPERTY(EditAnywhere, Config, Category = "General", meta = (ClampMin = "0", ClampMax = "3", UIMin = "0", UIMax = "3", DisplayName = "NR Preset", ToolTip = "Network weights hint (0..3). No visible effect with the 310.8 nvngx_dlssnr.dll: it embeds a single network (one WEIGHTS_HT resource) and every preset falls back to it. Kept for future runtime builds. Changing it rebuilds the feature and resets history."))
     int32 Preset = 1;
 
     // Edited by the dedicated Slate slider in the DLSS 5 window rather than the generic DetailsView.

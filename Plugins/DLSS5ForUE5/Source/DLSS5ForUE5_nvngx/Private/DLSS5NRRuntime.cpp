@@ -352,6 +352,9 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
     P->Set("DLSSNR.Output.Height", static_cast<unsigned int>(OutputSize.Y));
     P->Set("DLSSNR.Scale", D.ScalingRatio);
     P->Set("DLSSNR.ScalingRatio", D.ScalingRatio);
+    // Written as both signed and unsigned: NGX parameters are typed and feeders disagree on which
+    // the snippet reads (OptiScaler/neural-upstream use unsigned).
+    P->Set("DLSSNR.Hint.Render.Preset", static_cast<unsigned int>(FMath::Max(0, D.Preset)));
     P->Set("DLSSNR.Hint.Render.Preset", D.Preset);
     P->Set("CreationNodeMask", 1u);
     P->Set("VisibilityNodeMask", 1u);

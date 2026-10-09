@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.6.1 (scragnog fork) - 2026-10-09
 
+- Preset tooltip and CVar help state that presets have no effect with the 310.8 runtime, which embeds a single network; the hint is written as both unsigned and signed for future runtime builds.
 - Object velocity is decoded with the engine's `DecodeVelocityFromTexture`. UE 5.x gamma-encodes velocity on SM5+, and the previous linear unpack inflated small motion by an order of magnitude, so animated characters never settled while static geometry (camera reprojection) was stable.
 - Motion-vector guide is now handed to NGX in display-pixel units with a unit scale, matching NVIDIA's UE DLSS plugin. It was normalised by the guide width, so NR received near-zero motion and history blended unaligned under camera movement.
 - Depth and motion guides are resolved at the NR colour resolution instead of the render resolution.
