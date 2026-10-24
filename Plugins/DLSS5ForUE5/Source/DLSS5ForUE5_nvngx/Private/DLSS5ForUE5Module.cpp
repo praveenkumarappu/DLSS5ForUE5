@@ -5,8 +5,10 @@
 #include "DLSS5NRCVars.h"
 #include "DLSS5NRViewExtension.h"
 
+#include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/CoreDelegates.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Runtime/Launch/Resources/Version.h"
 #include "RenderingThread.h"
@@ -18,6 +20,13 @@ DEFINE_LOG_CATEGORY(LogDLSS5);
 
 namespace
 {
+    // Present while an editor session with NR is running; a leftover file means the last session
+    // did not shut down cleanly, and the next boot falls back to the colour-only safe path.
+    FString SessionMarkerPath()
+    {
+        return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("DLSS5NR"), TEXT("session.lock"));
+    }
+
     FString RectString(const FIntRect& Rect)
     {
         return FString::Printf(TEXT("(%d,%d) %dx%d"), Rect.Min.X, Rect.Min.Y, Rect.Width(), Rect.Height());
@@ -91,15 +100,14 @@ namespace
             Settings->bFeedSceneGuides = false;
             Settings->bUseMotionVectors = false;
             Settings->ApplyToCVars();
-            Settings->SaveConfig();
             Settings->RefreshDiagnostics();
-            UE_LOG(LogDLSS5, Display, TEXT("DLSS5 Safe Mode enabled."));
+            UE_LOG(LogDLSS5, Display, TEXT("DLSS5 Safe Mode enabled for this session."));
         }
     }
 
     FAutoConsoleCommand GDLSS5SafeModeCommand(
         TEXT("DLSS5.SafeMode"),
-        TEXT("Disable Neural Rendering and experimental scene-guide execution, then save the safe configuration."),
+        TEXT("Disable Neural Rendering and scene-guide execution for this session."),
         FConsoleCommandDelegate::CreateStatic(&EnterSafeModeFromConsole));
 }
 
@@ -146,19 +154,31 @@ void FDLSS5ForUE5Module::HandlePostEngineInit()
     UDLSS5NRSettings* Settings = GetMutableDefault<UDLSS5NRSettings>();
     if (Settings)
     {
-        // Session-safe boot: never restore experimental scene-guide execution automatically.
-        // Config-backed values can survive a previous crash, so a previous session can leave guides enabled
-        // in the user's project config. Force the volatile in-memory settings back to the proven
-        // color-only path on every editor start. The user can explicitly re-enable guides after
-        // the editor is fully running. Do not SaveConfig() here.
-        Settings->bEnableNeuralRendering = false;
-        Settings->bEnableSceneGuides = false;
-        Settings->bFeedSceneGuides = false;
-        Settings->bUseMotionVectors = false;
-        Settings->ApplyToCVars();
+        // The r.DLSS5.* CVars from DefaultEngine.ini are the launch state. Mirror them into the
+        // window's settings object instead of overriding them. Safe boot (everything forced off)
+        // only engages when the previous session left its marker behind, i.e. crashed.
+        const FString Marker = SessionMarkerPath();
+        const bool bPreviousSessionCrashed = IFileManager::Get().FileExists(*Marker);
+        FFileHelper::SaveStringToFile(FDateTime::UtcNow().ToIso8601(), *Marker);
+
+        Settings->LoadFromCVars();
+        if (bPreviousSessionCrashed)
+        {
+            Settings->bEnableNeuralRendering = false;
+            Settings->bEnableSceneGuides = false;
+            Settings->bFeedSceneGuides = false;
+            Settings->bUseMotionVectors = false;
+            Settings->ApplyToCVars();
+            UE_LOG(LogDLSS5, Warning, TEXT("Safe boot: the previous session did not shut down cleanly (%s). Neural Rendering, scene guides and motion vectors are OFF for this session; re-enable from Tools > DLSS 5 for UE5."), *Marker);
+        }
         Settings->RefreshDiagnostics();
 
-        UE_LOG(LogDLSS5, Display, TEXT("Safe boot active: Neural Rendering, 3D Scene Guides, guide feed, and motion vectors were forced OFF for this editor session."));
+        UE_LOG(LogDLSS5, Display, TEXT("Settings mirrored from r.DLSS5.* console variables: NR %s, scene guides %s, guide feed %s, motion vectors %s, pass count %d."),
+            Settings->bEnableNeuralRendering ? TEXT("ON") : TEXT("OFF"),
+            Settings->bEnableSceneGuides ? TEXT("ON") : TEXT("OFF"),
+            Settings->bFeedSceneGuides ? TEXT("ON") : TEXT("OFF"),
+            Settings->bUseMotionVectors ? TEXT("ON") : TEXT("OFF"),
+            Settings->PassCount);
     }
 
     ViewExtension = FSceneViewExtensions::NewExtension<FDLSS5NRViewExtension>();
@@ -212,6 +232,9 @@ void FDLSS5ForUE5Module::ShutdownModule()
     }
     FlushRenderingCommands();
     FDLSS5NRRuntime::Get().Unload();
+
+    // Clean shutdown: clear the crash marker so the next boot honours the configured CVars.
+    IFileManager::Get().Delete(*SessionMarkerPath(), false, false, true);
 }
 
 IMPLEMENT_MODULE(FDLSS5ForUE5Module, DLSS5ForUE5_nvngx)

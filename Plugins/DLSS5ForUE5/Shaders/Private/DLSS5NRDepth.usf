@@ -1,22 +1,25 @@
 #include "/Engine/Public/Platform.ush"
 
 // DLSS5NR UE scene-depth guide resolve.
-// Copies the active UE depth subrect into a compact, zero-based R32_FLOAT texture.
+// Resamples the active UE depth subrect (render resolution) into a zero-based R32_FLOAT texture
+// at the NR colour (display) resolution so the guide matches the colour input.
 
 Texture2D<float> DepthTexture;
 int2 SourceRectMin;
 int2 SourceRectSize;
+int2 OutputSize;
 RWTexture2D<float> OutputDepth;
 
 [numthreads(8, 8, 1)]
 void DepthMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
-    const uint2 LocalPixel = DispatchThreadId.xy;
-    if (LocalPixel.x >= (uint)SourceRectSize.x || LocalPixel.y >= (uint)SourceRectSize.y)
+    const uint2 OutPixel = DispatchThreadId.xy;
+    if (OutPixel.x >= (uint)OutputSize.x || OutPixel.y >= (uint)OutputSize.y)
     {
         return;
     }
 
-    const int2 SourcePixel = int2(LocalPixel) + SourceRectMin;
-    OutputDepth[LocalPixel] = DepthTexture.Load(int3(SourcePixel, 0)).r;
+    const float2 ViewportUV = (float2(OutPixel) + 0.5f) / float2(OutputSize);
+    const int2 SourcePixel = SourceRectMin + min(int2(ViewportUV * float2(SourceRectSize)), SourceRectSize - 1);
+    OutputDepth[OutPixel] = DepthTexture.Load(int3(SourcePixel, 0)).r;
 }

@@ -1,0 +1,32 @@
+#include "/Engine/Public/Platform.ush"
+
+// Blends the original post-tonemap colour back in over the NR result for bright pixels.
+// The network pulls near-clipping highlights down even at Local Tone 0; this keeps lights and
+// emissive panels at their tonemapped brightness. Thresholds are in display-encoded units.
+// Also restores the tonemapper alpha, which NR does not preserve (r.PostProcessing.PropagateAlpha).
+
+Texture2D<float4> InputColor;
+Texture2D<float4> NRColor;
+int2 RectMin;
+int2 RectSize;
+float PreserveStart;
+float PreserveEnd;
+RWTexture2D<float4> OutputColor;
+
+[numthreads(8, 8, 1)]
+void HighlightPreserveMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+    if (DispatchThreadId.x >= (uint)RectSize.x || DispatchThreadId.y >= (uint)RectSize.y)
+    {
+        return;
+    }
+
+    const int2 Pixel = int2(DispatchThreadId.xy) + RectMin;
+    const float4 In = InputColor.Load(int3(Pixel, 0));
+    const float4 NR = NRColor.Load(int3(Pixel, 0));
+
+    const float Brightness = max(In.r, max(In.g, In.b));
+    const float Weight = (PreserveEnd > PreserveStart) ? smoothstep(PreserveStart, PreserveEnd, Brightness) : 0.0f;
+
+    OutputColor[Pixel] = float4(lerp(NR.rgb, In.rgb, Weight), In.a);
+}

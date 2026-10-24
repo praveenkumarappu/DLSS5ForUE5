@@ -1,0 +1,34 @@
+#include "/Engine/Public/Platform.ush"
+
+// DLSS-NR control-mask guide from UE custom depth stencil, resolved at the NR colour resolution.
+// Actors with "Render CustomDepth Pass" and a matching stencil value are written as 1.0.
+// StencilValue < 0 matches any non-zero stencil. Invert swaps which side of the mask is 1.0.
+
+Texture2D<uint2> CustomStencilTexture;
+int2 SourceRectMin;
+int2 SourceRectSize;
+int2 OutputSize;
+int StencilValue;
+uint Invert;
+RWTexture2D<float> OutputMask;
+
+[numthreads(8, 8, 1)]
+void ControlMaskMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+    const uint2 OutPixel = DispatchThreadId.xy;
+    if (OutPixel.x >= (uint)OutputSize.x || OutPixel.y >= (uint)OutputSize.y)
+    {
+        return;
+    }
+
+    const float2 ViewportUV = (float2(OutPixel) + 0.5f) / float2(OutputSize);
+    const int2 SourcePixel = SourceRectMin + min(int2(ViewportUV * float2(SourceRectSize)), SourceRectSize - 1);
+    const uint Stencil = CustomStencilTexture.Load(int3(SourcePixel, 0)) STENCIL_COMPONENT_SWIZZLE;
+
+    bool bInside = (StencilValue < 0) ? (Stencil != 0u) : (Stencil == (uint)StencilValue);
+    if (Invert != 0u)
+    {
+        bInside = !bInside;
+    }
+    OutputMask[OutPixel] = bInside ? 1.0f : 0.0f;
+}

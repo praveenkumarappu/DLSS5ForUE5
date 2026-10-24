@@ -1,5 +1,18 @@
 # DLSS5ForUE5
 
+> **This is the maintained fork.** The original repository has had no activity since v0.6.0 (14 September 2026) and open issues and pull requests there are unanswered. Development continues here on `main`.
+>
+> What this fork fixes and adds on top of v0.6.0 (full list in [CHANGELOG.md](CHANGELOG.md)):
+> - Motion vectors are handed to NGX in display-pixel units with a unit scale, as NVIDIA's own UE DLSS plugin does. v0.6.0 normalised them to UV units, about a thousand times too small, so Neural Rendering saw no motion and the image swam under camera movement.
+> - GBuffer velocity is decoded with the engine helper. UE 5.x gamma-encodes it; the old linear unpack made animated characters jitter while static geometry stayed stable.
+> - Depth and motion guides are resolved at the colour resolution.
+> - A highlight-preserve pass keeps tonemapped lights and emissive surfaces at their brightness and restores the tonemapper alpha.
+> - The `r.DLSS5.*` values in `DefaultEngine.ini` are the launch state; the editor window mirrors them and no longer saves to config. Safe boot engages only after a crashed session.
+> - Control mask (from custom depth stencil) and bidirectional distortion field inputs are exposed. Style accepts the runtime's full 0..2 range.
+> - Presets are documented as having no effect with the 310.8 runtime, which embeds a single network ([upstream issue 9](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/9)).
+>
+> There are no prebuilt ZIPs for the fork yet: copy `Plugins/DLSS5ForUE5` into your project and let the editor compile it (a C++ toolchain is required), then add `nvngx_dlssnr.dll` to `Binaries/ThirdParty/Win64` as described below. Tested on Unreal Engine 5.7 with D3D12. Issues and pull requests are welcome here.
+
 **Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5–5.8**
 
 DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1–4 sequential Neural Rendering passes.

@@ -8,7 +8,7 @@ static TAutoConsoleVariable<int32> CVarDLSS5NREnable(
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPreset(
     TEXT("r.DLSS5.Preset"), 1,
-    TEXT("DLSS-NR render preset hint. Experimental: 0..3."),
+    TEXT("DLSS-NR render preset hint, 0..3. No effect with the 310.8 runtime, which embeds a single network; kept for future builds. Changing it rebuilds the feature."),
     ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPassCount(
@@ -30,7 +30,7 @@ static TAutoConsoleVariable<float> CVarDLSS5NRLocalStructure(
 
 static TAutoConsoleVariable<float> CVarDLSS5NRSkinStructure(
     TEXT("r.DLSS5.SkinStructure"), 1.0f,
-    TEXT("Skin structure strength."), ECVF_RenderThreadSafe);
+    TEXT("Skin structure strength. -1 leaves the runtime default (NVIDIA reference)."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRAutoMask(
     TEXT("r.DLSS5.AutoMask"), 1,
@@ -38,7 +38,7 @@ static TAutoConsoleVariable<int32> CVarDLSS5NRAutoMask(
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRStyle(
     TEXT("r.DLSS5.Style"), 0,
-    TEXT("Style. 0=Natural, 1=Cinematic/alternate."), ECVF_RenderThreadSafe);
+    TEXT("Style 0..2. Measured: 0 closest to source, 1 warmer/sharper (NVIDIA reference default), 2 muted/softer (cinematic). Community names Default/Natural/Cinematic are unverified. Changing it resets NR history."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRUICorrection(
     TEXT("r.DLSS5.UICorrection"), 0,
@@ -72,15 +72,50 @@ static TAutoConsoleVariable<int32> CVarDLSS5NRDepthInverted(
 
 static TAutoConsoleVariable<float> CVarDLSS5NRMVecScaleX(
     TEXT("r.DLSS5.MVecScaleX"), 1.0f,
-    TEXT("Multiplier applied to automatic X motion-vector normalization (1/view width)."), ECVF_RenderThreadSafe);
+    TEXT("Debug multiplier for X motion vectors. Guides are display-pixel units, so 1.0 is the NGX convention."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<float> CVarDLSS5NRMVecScaleY(
     TEXT("r.DLSS5.MVecScaleY"), 1.0f,
-    TEXT("Multiplier applied to automatic Y motion-vector normalization (1/view height)."), ECVF_RenderThreadSafe);
+    TEXT("Debug multiplier for Y motion vectors. Guides are display-pixel units, so 1.0 is the NGX convention."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<float> CVarDLSS5NRExposureResetRatio(
     TEXT("r.DLSS5.ExposureResetRatio"), 2.0f,
     TEXT("Reset history when pre-exposure changes by more than this ratio. Minimum 1.1."), ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<FString> CVarDLSS5NRDistortionFieldTexture(
+    TEXT("r.DLSS5.DistortionFieldTexture"), TEXT(""),
+    TEXT("Asset path of an RGBA16F texture/render target fed as DLSSNR.BidirectionalDistortionField. RG = distorted-to-undistorted displacement, BA = inverse, in motion-vector units (display pixels). Empty = none."),
+    ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarDLSS5NRScalingRatio(
+    TEXT("r.DLSS5.ScalingRatio"), 1.0f,
+    TEXT("Experimental DLSSNR.ScalingRatio (0.25..1). Below 1 the network runs at a lower resolution. Forces pass count 1 while active."),
+    ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<int32> CVarDLSS5NRScalingRatioMode(
+    TEXT("r.DLSS5.ScalingRatioMode"), 0,
+    TEXT("0 = downsample the NR colour input and guides to the ratio (DLSS-style, NR upscales to the output). 1 = full-resolution input, ratio hint only."),
+    ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<int32> CVarDLSS5NRControlMaskStencil(
+    TEXT("r.DLSS5.ControlMaskStencil"), 0,
+    TEXT("Feed a DLSSNR.ControlMask guide built from UE custom depth stencil. 0=Off, -1=any non-zero stencil, 1..255=that stencil value. Actors need Render CustomDepth Pass enabled. Experimental: mask semantics are undocumented."),
+    ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<int32> CVarDLSS5NRControlMaskInvert(
+    TEXT("r.DLSS5.ControlMaskInvert"), 0,
+    TEXT("Invert the control mask (1.0 outside the tagged actors instead of inside)."),
+    ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<float> CVarDLSS5NRHighlightPreserveStart(
+    TEXT("r.DLSS5.HighlightPreserveStart"), 0.7f,
+    TEXT("Display-encoded brightness (0..1) where the original tonemapped colour starts blending back over the NR result. Set >= End to disable."),
+    ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<float> CVarDLSS5NRHighlightPreserveEnd(
+    TEXT("r.DLSS5.HighlightPreserveEnd"), 0.9f,
+    TEXT("Display-encoded brightness (0..1) from which the original tonemapped colour fully replaces the NR result."),
+    ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRDebug(
     TEXT("r.DLSS5.Debug"), 1,
@@ -107,5 +142,12 @@ namespace DLSS5NR
     float GetMVecScaleX() { return CVarDLSS5NRMVecScaleX.GetValueOnRenderThread(); }
     float GetMVecScaleY() { return CVarDLSS5NRMVecScaleY.GetValueOnRenderThread(); }
     float GetExposureResetRatio() { return CVarDLSS5NRExposureResetRatio.GetValueOnRenderThread(); }
+    FString GetDistortionFieldTexture() { return CVarDLSS5NRDistortionFieldTexture.GetValueOnGameThread(); }
+    float GetScalingRatio() { return CVarDLSS5NRScalingRatio.GetValueOnRenderThread(); }
+    int32 GetScalingRatioMode() { return CVarDLSS5NRScalingRatioMode.GetValueOnRenderThread(); }
+    int32 GetControlMaskStencil() { return CVarDLSS5NRControlMaskStencil.GetValueOnRenderThread(); }
+    int32 GetControlMaskInvert() { return CVarDLSS5NRControlMaskInvert.GetValueOnRenderThread(); }
+    float GetHighlightPreserveStart() { return CVarDLSS5NRHighlightPreserveStart.GetValueOnRenderThread(); }
+    float GetHighlightPreserveEnd() { return CVarDLSS5NRHighlightPreserveEnd.GetValueOnRenderThread(); }
     int32 GetDebug() { return CVarDLSS5NRDebug.GetValueOnRenderThread(); }
 }

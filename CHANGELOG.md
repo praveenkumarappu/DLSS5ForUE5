@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.1 (scragnog fork) - 2026-10-09
+
+- Preset tooltip and CVar help state that presets have no effect with the 310.8 runtime, which embeds a single network; the hint is written as both unsigned and signed for future runtime builds.
+- Object velocity is decoded with the engine's `DecodeVelocityFromTexture`. UE 5.x gamma-encodes velocity on SM5+, and the previous linear unpack inflated small motion by an order of magnitude, so animated characters never settled while static geometry (camera reprojection) was stable.
+- Motion-vector guide is now handed to NGX in display-pixel units with a unit scale, matching NVIDIA's UE DLSS plugin. It was normalised by the guide width, so NR received near-zero motion and history blended unaligned under camera movement.
+- Depth and motion guides are resolved at the NR colour resolution instead of the render resolution.
+- Added a highlight-preserve blend (`r.DLSS5.HighlightPreserveStart/End`) that keeps tonemapped brightness for lights and emissive surfaces and restores the tonemapper alpha.
+- `r.DLSS5.*` console variables are the launch state; the editor window mirrors them and no longer saves to config. Safe boot engages only after a session that did not shut down cleanly (`Saved/DLSS5NR/session.lock`).
+- Style accepts 0..2 and is labelled by measured behaviour; Skin Structure accepts -1 (runtime default).
+- Added `DLSSNR.ControlMask` from UE custom depth stencil (`r.DLSS5.ControlMaskStencil`, `r.DLSS5.ControlMaskInvert`). Mask 0 leaves the source untouched, 1 applies NR.
+- Added `DLSSNR.BidirectionalDistortionField` input from a project texture (`r.DLSS5.DistortionFieldTexture`).
+- Added experimental `r.DLSS5.ScalingRatio` / `r.DLSS5.ScalingRatioMode`; the current runtime rejects a downscaled input and shows no effect from the hint alone.
+- Feature-creation log line now reports input size, ratio, style, mask and field.
+
 ## v0.6.0 - NR Stability Update
 
 - Added independent Neural Rendering feature/history state per view and sequential pass.
