@@ -1,8 +1,8 @@
 # DLSS5ForUE5
 
-**Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5â€“5.8**
+**Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5-5.8**
 
-DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1â€“4 sequential Neural Rendering passes.
+DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1-4 sequential Neural Rendering passes.
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
@@ -41,8 +41,8 @@ DLSS5ForUE5 relies on NVIDIA's official UE DLSS/NGX integration for NGX initiali
 
 ```text
 YourProject/
-â””â”€â”€ Plugins/
-    â””â”€â”€ DLSS5ForUE5/
+  Plugins/
+    DLSS5ForUE5/
 ```
 
 4. Open the project and enable **DLSS** and **DLSS 5 for UE5** if Unreal asks.
@@ -50,12 +50,12 @@ YourProject/
 6. Open:
 
 ```text
-Tools â†’ DLSS 5 for UE5
+Tools > DLSS 5 for UE5
 ```
 
 ![Open DLSS 5 for UE5 from the Tools menu](docs/images/01-tools-menu.png)
 
-The precompiled release already contains the plugin binaries for that UE version, so Visual Studio is not required for normal installation.
+Precompiled release ZIPs include Unreal Engine-specific plugin binaries; Visual Studio is not required for the standard installation.
 
 ## Screenshots
 
@@ -84,7 +84,7 @@ These are existing maintainer validation claims, not new tests performed by this
 
 ## Features
 
-- Dedicated **Tools â†’ DLSS 5 for UE5** window
+- Dedicated **Tools > DLSS 5 for UE5** window
 - Natural and Cinematic styles
 - Neural Rendering preset control
 - Intensity, Local Tone, Local Structure, and Skin Structure controls
@@ -93,7 +93,7 @@ These are existing maintainer validation claims, not new tests performed by this
 - Dense DLSS-compatible motion-vector guide
 - Jitter, pre-exposure, camera-cut, and history-reset tracking
 - Automatic history reset
-- **1â€“4 sequential Neural Rendering passes**
+- **1-4 sequential Neural Rendering passes**
 - Live diagnostics for runtime, NGX, guides, subrects, temporal state, and frame counters
 - Safe Mode recovery
 - Console commands under `DLSS5.*` / `r.DLSS5.*`
@@ -108,7 +108,7 @@ More passes significantly increase GPU cost and are not automatically better. St
 
 The plugin can feed UE scene depth and generated dense motion vectors into Neural Rendering. Scene guides were found to improve temporal stability and reduce visible flicker in tested scenes.
 
-Motion-vector handling remains experimental because some UE render-hook states expose the native object-velocity source as a `1Ã—1` dummy texture. The plugin reconstructs camera/background motion from depth when necessary.
+Motion-vector handling remains experimental because some UE render-hook states expose the native object-velocity source as a `1x1` dummy texture. The plugin reconstructs camera/background motion from depth when necessary.
 
 ## Diagnostics
 
@@ -132,6 +132,8 @@ r.DLSS5.UseDepth
 r.DLSS5.UseMotionVectors
 ```
 
+`DLSS5.Open` is an Editor-only command. For runtime diagnostics, use `DLSS5.Status`.
+
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full list.
 
 ## Known issue: Movie Render Queue / Streamline
@@ -142,7 +144,7 @@ See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for details and workarounds.
 
 ## Source builds
 
-The repository uses one version-aware source tree for UE 5.5â€“5.8. Compatibility code is selected at compile time with Unreal Engine version guards. UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
+The repository uses one version-aware source tree for UE 5.5-5.8. Compatibility code is selected at compile time with Unreal Engine version guards. UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
 
 ## Developer
 
@@ -155,7 +157,7 @@ The repository uses one version-aware source tree for UE 5.5â€“5.8. Compati
 
 ## Contributors
 
-- **[@scragnog](https://github.com/scragnog)** â€” identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
+- **[@scragnog](https://github.com/scragnog)** - identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
 
 ## Documentation
 
@@ -173,7 +175,7 @@ The repository uses one version-aware source tree for UE 5.5â€“5.8. Compati
 
 ## Third-party software
 
-The release packages include NVIDIA runtime components used by the plugin. NVIDIA software is **not** licensed under this repository's MIT License and remains subject to NVIDIA's applicable license terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Some release artifacts may include proprietary NVIDIA components. Such components are not covered by this repository's MIT License, and their use or redistribution is subject to applicable NVIDIA terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
