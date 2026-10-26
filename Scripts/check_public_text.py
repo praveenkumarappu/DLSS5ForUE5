@@ -21,7 +21,7 @@ BAD_FRAGMENTS = (
     "\u00e2\u201d", "\u00c3\u00d7", "\u00c2\u00a0",
     "\u00ef\u00bb\u00bf", "\ufffd",
 )
-LOCAL_PATH = re.compile(r"(?i)\b[A-Z]:[\\/]|/(?:Users|home)/[^/\s]+")
+LOCAL_PATH = re.compile(r"(?i)[A-Z]:[\\/](?:Users|CUSTOMGPT|UnrealProjects|NR6|RND5_6|Epicgames)|/(?:Users|home)/[^/\s]+")
 AI_MARKER = re.compile(
     r"(?i)\b(?:as an (?:AI )?language model|"
     r"generated with (?:claude|codex) code|"
