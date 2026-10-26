@@ -3,10 +3,12 @@
 ## Commands
 
 ```text
-DLSS5.Open      Open the editor control window
+DLSS5.Open      Editor only: open the editor control window
 DLSS5.Status    Print runtime / guide diagnostics
 DLSS5.SafeMode  Disable NR and experimental guides
 ```
+
+`DLSS5.Open` is registered by the Editor module and is unavailable in packaged or `-game` runtime targets. `DLSS5.Status` is the runtime diagnostic command; its availability and logging in Shipping builds depend on the host's console and build settings.
 
 ## Main CVars
 
