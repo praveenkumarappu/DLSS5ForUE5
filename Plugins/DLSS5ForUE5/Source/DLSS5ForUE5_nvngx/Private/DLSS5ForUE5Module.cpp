@@ -18,6 +18,12 @@ DEFINE_LOG_CATEGORY(LogDLSS5);
 
 namespace
 {
+    FString GetPluginVersionLabel()
+    {
+        const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("DLSS5ForUE5"));
+        return Plugin.IsValid() ? Plugin->GetDescriptor().VersionName : TEXT("unknown");
+    }
+
     FString RectString(const FIntRect& Rect)
     {
         return FString::Printf(TEXT("(%d,%d) %dx%d"), Rect.Min.X, Rect.Min.Y, Rect.Width(), Rect.Height());
@@ -30,7 +36,7 @@ namespace
         const bool bDLSSInstalled = NvidiaDLSS.IsValid();
         const bool bDLSSEnabled = bDLSSInstalled && NvidiaDLSS->IsEnabled();
 
-        UE_LOG(LogDLSS5, Display, TEXT("================ DLSS5 v0.5.6 Status ================"));
+        UE_LOG(LogDLSS5, Display, TEXT("================ DLSS5 %s Status ================"), *GetPluginVersionLabel());
         UE_LOG(LogDLSS5, Display, TEXT("NVIDIA DLSS plugin found/enabled: %s / %s"),
             bDLSSInstalled ? TEXT("YES") : TEXT("NO"), bDLSSEnabled ? TEXT("YES") : TEXT("NO"));
         UE_LOG(LogDLSS5, Display, TEXT("NR runtime loaded/initialized: %s / %s"),
@@ -79,7 +85,7 @@ namespace
 
     FAutoConsoleCommand GDLSS5NRStatusCommand(
         TEXT("DLSS5.Status"),
-        TEXT("Print DLSS 5 for UE5 v0.5.6 runtime/guide diagnostics."),
+        TEXT("Print DLSS 5 for UE5 runtime and scene-guide diagnostics."),
         FConsoleCommandDelegate::CreateStatic(&PrintStatus));
 
     void EnterSafeModeFromConsole()
@@ -136,7 +142,7 @@ void FDLSS5ForUE5Module::StartupModule()
 #else
     PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FDLSS5ForUE5Module::HandlePostEngineInit);
 #endif
-    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 experimental plugin v0.5.6 bootstrap loaded."));
+    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 experimental plugin %s bootstrap loaded."), *GetPluginVersionLabel());
 #endif
 }
 
@@ -167,7 +173,8 @@ void FDLSS5ForUE5Module::HandlePostEngineInit()
         FTickerDelegate::CreateRaw(this, &FDLSS5ForUE5Module::TickDiagnostics), 0.5f);
 
     const TSharedPtr<IPlugin> NvidiaDLSS = IPluginManager::Get().FindPlugin(TEXT("DLSS"));
-    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 v0.5.6 renderer ready. NVIDIA DLSS plugin: %s. Artist UI: Tools > DLSS 5 for UE5."),
+    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 %s renderer ready. NVIDIA DLSS plugin: %s. Artist UI: Tools > DLSS 5 for UE5."),
+        *GetPluginVersionLabel(),
         (NvidiaDLSS.IsValid() && NvidiaDLSS->IsEnabled()) ? TEXT("enabled") : TEXT("not enabled / NGX core may be unavailable"));
 #endif
 }
