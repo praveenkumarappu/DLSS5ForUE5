@@ -159,6 +159,8 @@ The repository uses one version-aware source tree for UE 5.5-5.8. Compatibility 
 
 - **[@scragnog](https://github.com/scragnog)** - identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
 
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the complete acknowledgements, including pending contributions that have not been merged.
+
 ## Documentation
 
 - [Installation](docs/INSTALLATION.md)
@@ -175,7 +177,7 @@ The repository uses one version-aware source tree for UE 5.5-5.8. Compatibility 
 
 ## Third-party software
 
-Some release artifacts may include proprietary NVIDIA components. Such components are not covered by this repository's MIT License, and their use or redistribution is subject to applicable NVIDIA terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+NVIDIA's proprietary Neural Rendering runtime is not covered by the repository's MIT License. Redistribution of the experimental `nvngx_dlssnr.dll` used in local v0.6.1 validation is **not yet authorized or established for this project**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
