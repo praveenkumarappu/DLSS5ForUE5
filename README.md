@@ -1,8 +1,8 @@
 # DLSS5ForUE5
 
-**Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5–5.8**
+**Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5â€“5.8**
 
-DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1–4 sequential Neural Rendering passes.
+DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1â€“4 sequential Neural Rendering passes.
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
@@ -41,8 +41,8 @@ DLSS5ForUE5 relies on NVIDIA's official UE DLSS/NGX integration for NGX initiali
 
 ```text
 YourProject/
-└── Plugins/
-    └── DLSS5ForUE5/
+â””â”€â”€ Plugins/
+    â””â”€â”€ DLSS5ForUE5/
 ```
 
 4. Open the project and enable **DLSS** and **DLSS 5 for UE5** if Unreal asks.
@@ -50,7 +50,7 @@ YourProject/
 6. Open:
 
 ```text
-Tools → DLSS 5 for UE5
+Tools â†’ DLSS 5 for UE5
 ```
 
 ![Open DLSS 5 for UE5 from the Tools menu](docs/images/01-tools-menu.png)
@@ -67,20 +67,24 @@ The precompiled release already contains the plugin binaries for that UE version
 
 ![DLSS5ForUE5 in Unreal Engine Plugin Browser](docs/images/04-plugin-browser.png)
 
-## Verified engine versions
+## Engine compatibility and validation scope
 
-| Unreal Engine | Build | Runtime | Scene Depth | Motion Guide | Multi-pass |
-| --- | --- | --- | --- | --- | --- |
-| UE 5.5 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| UE 5.6 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| UE 5.7 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| UE 5.8 | ✅ | ✅ | ✅ | ✅ | ✅ |
+The maintained stable baseline is **v0.6.0**. Neural Rendering remains experimental and editor-focused; "stable" does not mean that every engine, GPU, driver, or packaged configuration has been independently validated.
 
-Validation was performed on Windows/D3D12 with an NVIDIA RTX GPU. The v0.6.0 NR lifetime changes were directly validated by the maintainer on UE 5.5 and UE 5.6; equivalent v0.6.0 runtime validation on UE 5.7 and UE 5.8 remains to be confirmed. Other hardware and driver combinations may behave differently.
+| Unreal Engine | v0.6.0 runtime validation |
+| --- | --- |
+| UE 5.5 | Maintainer-tested editor NR lifetime update with 3D scene guides |
+| UE 5.6 | Maintainer-tested editor NR lifetime update with 3D scene guides |
+| UE 5.7 | Compatibility target; equivalent v0.6.0 runtime checks pending |
+| UE 5.8 | Compatibility target; equivalent v0.6.0 runtime checks pending |
+
+These are existing maintainer validation claims, not new tests performed by this documentation update. See [runtime validation](docs/NR_RUNTIME_VALIDATION.md) for the test scope.
+
+**Packaged Development and Shipping native Neural Rendering are unsupported for this baseline.** A separate v0.6.1 validation build failed NGX initialization with `NVSDK_NGX_D3D12_Init_Ext` returning `0xBAD00002` and zero successful native evaluations. Those results are not direct v0.6.0 validation, and successful packaging or fallback rendering does not establish native inference support.
 
 ## Features
 
-- Dedicated **Tools → DLSS 5 for UE5** window
+- Dedicated **Tools â†’ DLSS 5 for UE5** window
 - Natural and Cinematic styles
 - Neural Rendering preset control
 - Intensity, Local Tone, Local Structure, and Skin Structure controls
@@ -89,7 +93,7 @@ Validation was performed on Windows/D3D12 with an NVIDIA RTX GPU. The v0.6.0 NR 
 - Dense DLSS-compatible motion-vector guide
 - Jitter, pre-exposure, camera-cut, and history-reset tracking
 - Automatic history reset
-- **1–4 sequential Neural Rendering passes**
+- **1â€“4 sequential Neural Rendering passes**
 - Live diagnostics for runtime, NGX, guides, subrects, temporal state, and frame counters
 - Safe Mode recovery
 - Console commands under `DLSS5.*` / `r.DLSS5.*`
@@ -104,7 +108,7 @@ More passes significantly increase GPU cost and are not automatically better. St
 
 The plugin can feed UE scene depth and generated dense motion vectors into Neural Rendering. Scene guides were found to improve temporal stability and reduce visible flicker in tested scenes.
 
-Motion-vector handling remains experimental because some UE render-hook states expose the native object-velocity source as a `1×1` dummy texture. The plugin reconstructs camera/background motion from depth when necessary.
+Motion-vector handling remains experimental because some UE render-hook states expose the native object-velocity source as a `1Ã—1` dummy texture. The plugin reconstructs camera/background motion from depth when necessary.
 
 ## Diagnostics
 
@@ -138,7 +142,7 @@ See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for details and workarounds.
 
 ## Source builds
 
-The repository uses one version-aware source tree for UE 5.5–5.8. Compatibility code is selected at compile time with Unreal Engine version guards. UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
+The repository uses one version-aware source tree for UE 5.5â€“5.8. Compatibility code is selected at compile time with Unreal Engine version guards. UE 5.5 requires legacy `ISceneViewExtension` overrides, while UE 5.8 uses the newer `FCoreDelegates::GetOnPostEngineInit()` API.
 
 ## Developer
 
@@ -151,7 +155,7 @@ The repository uses one version-aware source tree for UE 5.5–5.8. Compatibilit
 
 ## Contributors
 
-- **[@scragnog](https://github.com/scragnog)** — identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
+- **[@scragnog](https://github.com/scragnog)** â€” identified and fixed the NR GPU feature-lifetime and temporal-history isolation issue in [#1](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/1) / [#2](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/2), including per-view/pass histories, GPU-fence retirement, guide/history fixes, motion-vector corrections, and regression coverage.
 
 ## Documentation
 

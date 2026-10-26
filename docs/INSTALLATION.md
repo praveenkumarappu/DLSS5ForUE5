@@ -1,17 +1,17 @@
-# Installation
+# Installation — v0.6.0 stable baseline
 
 ## Precompiled release installation
 
 1. Install NVIDIA's official DLSS plugin for the same Unreal Engine version used by your project.
 2. Download the matching DLSS5ForUE5 release ZIP:
-   - UE 5.5 → `DLSS5ForUE5 [v0.5.6] -UE5.5.zip`
-   - UE 5.6 → `DLSS5ForUE5 [v0.5.6] -UE5.6.zip`
-   - UE 5.7 → `DLSS5ForUE5 [v0.5.6] -UE5.7.zip`
-   - UE 5.8 → `DLSS5ForUE5 [v0.5.6] -UE5.8.zip`
+   - UE 5.5 â†’ `DLSS5ForUE5.v0.6.0.-UE5.5.zip`
+   - UE 5.6 â†’ `DLSS5ForUE5.v0.6.0.-UE5.6.zip`
+   - UE 5.7 â†’ `DLSS5ForUE5.v0.6.0.-UE5.7.zip`
+   - UE 5.8 â†’ `DLSS5ForUE5.v0.6.0.-UE5.8.zip`
 3. Extract the `DLSS5ForUE5` folder to `YourProject/Plugins/`.
 4. Launch the project and enable NVIDIA DLSS and DLSS5ForUE5 if prompted.
 5. Restart Unreal Engine.
-6. Open **Tools → DLSS 5 for UE5**.
+6. Open **Tools â†’ DLSS 5 for UE5**.
 
 The precompiled ZIP contains binaries for the selected engine version. Visual Studio is not required for normal installation.
 
@@ -19,7 +19,7 @@ The precompiled ZIP contains binaries for the selected engine version. Visual St
 
 If you clone the repository instead of using a release ZIP, place `Plugins/DLSS5ForUE5` inside your project and regenerate project files. Build `Development Editor / Win64` with Visual Studio 2022.
 
-The same source tree supports UE 5.5–5.8 through engine-version compatibility guards.
+The same source tree supports UE 5.5â€“5.8 through engine-version compatibility guards.
 
 ## Required NVIDIA plugin
 

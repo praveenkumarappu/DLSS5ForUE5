@@ -47,3 +47,9 @@ legally obtained NR runtime installed as described in the main README.
 5. Repeat in a packaged build and on the other supported engine versions.
 
 Steps above describe the review checklist, not a claim that every case was run.
+
+## Stable baseline and packaged support
+
+The maintained stable baseline is v0.6.0. Existing maintainer editor validation covers the NR lifetime update on UE 5.5 and UE 5.6; equivalent v0.6.0 runtime validation on UE 5.7 and UE 5.8 remains pending. No new compilation, GPU, or inference tests were performed for this documentation alignment.
+
+Packaged Development and Shipping native NR are unsupported for this baseline. Separate v0.6.1 validation reported NGX Init_Ext failure `0xBAD00002` with zero successful native evaluations; this must not be presented as direct v0.6.0 validation. Packaging success, DLL loading, mock tests, and fallback frames do not establish native neural inference.

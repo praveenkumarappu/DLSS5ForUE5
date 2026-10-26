@@ -28,7 +28,8 @@ foreach ($Legacy in $LegacyFolders) {
 if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
 Copy-Item -Recurse -Force $Source $Dest
 
-Write-Host "Installed DLSS5ForUE5 v0.5.6 to: $Dest"
+$InstalledVersion = (Get-Content -LiteralPath (Join-Path $Dest "DLSS5ForUE5.uplugin") -Raw | ConvertFrom-Json).VersionName
+Write-Host "Installed DLSS5ForUE5 v$InstalledVersion to: $Dest"
 Write-Host "Plugin UI: Tools > DLSS 5 for UE5"
 Write-Host "Console diagnostics: DLSS5.Status"
 Write-Host "Console UI shortcut: DLSS5.Open"
