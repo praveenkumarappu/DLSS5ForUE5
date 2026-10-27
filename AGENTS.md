@@ -4,14 +4,14 @@ Review this unofficial Unreal Engine plugin for correctness and severe regressio
 
 ## Release baseline
 
-- The current stable baseline is **v0.6.0** (`Version: 600`, `VersionName: 0.6.0`). Keep source, installer output, current installation instructions, and release documentation aligned with it.
-- Do not import the separate v0.6.1 validation build or present its results as direct v0.6.0 validation. Historical v0.5.6 release notes remain historical.
+- The maintained source baseline is **v0.6.1** (`Version: 601`, `VersionName: 0.6.1 Validation Build`), synchronized from the maintainer's verified source export on 2026-10-27. Keep source and public documentation aligned with that version. Do not change validated functionality without explicit authorization.
+- Historical v0.5.6 and v0.6.0 release notes remain historical. UE 5.6 and UE 5.8 viewport/MRQ behavior was maintainer-confirmed; UE 5.5 and UE 5.7 were rebuilt, but fresh runtime acceptance has not been asserted.
 - Stable baseline describes the maintained editor release; it does not establish packaged native NR support or independently verified runtime stability on every engine version.
 
 ## Critical review rules
 
 - Target Unreal Engine 5.5, 5.6, 5.7, and 5.8. Flag breaking API changes and missing UE version guards. A compile on one engine version is not proof of support for others.
-- Treat Neural Rendering as an experimental, editor-validated feature. Packaged Development and Shipping native NR are unsupported for this baseline. Separate v0.6.1 validation reported `NVSDK_NGX_D3D12_Init_Ext` returning `0xBAD00002`. Never describe fallback frames, successful DLL loads, or compilation as proof of native inference.
+- Treat Neural Rendering as an experimental, editor-validated feature. Packaged Development and Shipping native NR are unsupported for this baseline. Previous packaged-game validation reported `NVSDK_NGX_D3D12_Init_Ext` returning `0xBAD00002`. Never describe fallback frames, successful DLL loads, or compilation as proof of native inference.
 - For any claim that NR works, require evidence of NGX feature creation, increasing successful native evaluation counters, valid GPU output, and the exact tested engine, configuration, GPU, and driver.
 - Audit render-thread and RHI lifetime, GPU-fence retirement, feature release, D3D12 resource states, texture extent/view-rect mappings, depth, motion vectors, temporal jitter/history reset and per-view/pass isolation.
 - Verify safe initialization failure, runtime toggles, resize, camera cuts, Editor shutdown, and optional third-party plugin absence. Never hide actual NGX errors behind a PASS status.
