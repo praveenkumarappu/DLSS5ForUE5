@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.1 - Neural Rendering Runtime and Editor/MRQ Improvements (release candidate)
+## v0.6.1 - Neural Rendering Runtime and Editor/MRQ Improvements
 
 - Updated the bundled third-party Neural Rendering runtime used by the Editor Win64 validation packages to **310.9.16.0**.
 - **UE 5.6 and UE 5.8:** maintainer-confirmed working Neural Rendering in the Editor viewport and Movie Render Queue with the rebuilt 2026-10-27 binaries.
@@ -12,7 +12,7 @@
 - Credits: work from [@scragnog](https://github.com/scragnog)'s still-open [PR #5](https://github.com/praveenkumarappu/DLSS5ForUE5/pull/5) informed the implemented motion-guide, highlight-preservation and CVar changes. **PR #5 has not been merged in full.** Its custom-stencil mask, distortion field and other unvalidated experimental features are not advertised.
 - Native Neural Rendering in packaged Development/Shipping games remains unsupported; existing low-light/Streamline limitations are not represented as fixed.
 
-**Release synchronization status:** The compiled v0.6.1 source archive must be matched and committed to `main` before tagging or publishing. This changelog entry alone does not update the plugin implementation. See [v0.6.1 release notes](RELEASE_NOTES_v0.6.1.md).
+The v0.6.1 source implementation is synchronized on `main`. Refer to [v0.6.1 release notes](RELEASE_NOTES_v0.6.1.md) for tested configurations and limitations.
 
 ## v0.6.0 - NR Stability Update
 
