@@ -1,4 +1,5 @@
 #include "DLSS5NRRuntime.h"
+#include "DLSS5NRInitDiagnostics.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "HAL/PlatformProcess.h"
@@ -28,12 +29,13 @@ FDLSS5NRRuntime& FDLSS5NRRuntime::Get()
 
 void FDLSS5NRRuntime::SetError(const FString& Error, FNGXResult Result)
 {
+    const bool bDuplicate = LastError == Error && (Result == 0 || LastNGXResult == Result);
     LastError = Error;
     if (Result != 0)
     {
         LastNGXResult = Result;
     }
-    UE_LOG(LogDLSS5, Error, TEXT("%s"), *Error);
+    if (!bDuplicate) UE_LOG(LogDLSS5, Error, TEXT("%s"), *Error);
 }
 
 void FDLSS5NRRuntime::DetectCallerModulePath()
@@ -109,12 +111,12 @@ bool FDLSS5NRRuntime::Load()
     UE_LOG(LogDLSS5, Log, TEXT("Loaded DLSS-NR runtime: %s (NGX API 0x%X, AppId 0x%llX)"),
         *RuntimePath, GetAPIVersion(), GetApplicationId());
     UE_LOG(LogDLSS5, Display, TEXT("DLSS-NR caller module path: %s"), *CallerModulePath);
-    UE_LOG(LogDLSS5, Display, TEXT("DLSS-NR caller-gate path contains 'nvngx.dll': %s"), bCallerGatePathReady ? TEXT("YES") : TEXT("NO"));
+    UE_LOG(LogDLSS5, Display, TEXT("DLSS-NR legacy caller filename hint contains 'nvngx.dll': %s (diagnostic only; runtime initialization determines compatibility)"), bCallerGatePathReady ? TEXT("YES") : TEXT("NO"));
 
     if (!bCallerGatePathReady)
     {
         UE_LOG(LogDLSS5, Warning,
-            TEXT("The supplied DLSS-NR 310.8 snippet checks the caller module path for 'nvngx.dll'. DLSS5ForUE5 satisfies this through its internal *_nvngx module name."));
+            TEXT("Monolithic caller has no legacy nvngx filename hint. The plugin will use the runtime's actual initialization result."));
     }
 
     LastError.Reset();
@@ -226,11 +228,9 @@ bool FDLSS5NRRuntime::EnsureInitialized(ID3D12Device* Device)
         return false;
     }
 
-    if (!bCallerGatePathReady)
-    {
-        SetError(FString::Printf(TEXT("DLSS-NR caller gate is not satisfied. Caller module path is: %s"), *CallerModulePath), DLSS5NRNGX::FailBase | 2u);
-        return false;
-    }
+    // A module filename is not a capability query. Monolithic game targets compile
+    // this code into the game EXE. Let Init_Ext enforce the supplied runtime's
+    // actual requirements instead of fabricating an NGX failure before calling it.
 
     if (!ResolveNGXCoreParameters())
     {
@@ -245,7 +245,9 @@ bool FDLSS5NRRuntime::EnsureInitialized(ID3D12Device* Device)
 
     // DLSS-NR is an NGX feature snippet, not the NGX core. Its Init_Ext expects the
     // core's populated parameter block. Calling the snippet with nullptr is rejected.
+    DLSS5NRWriteInitDiagnostic(TEXT("BeforeInitExt"), Device, CoreParameters, RuntimePath, CallerModulePath, AppId, ApiVersion, 0);
     const FNGXResult Result = InitExt(AppId, *AppDataDir, Device, ApiVersion, CoreParameters);
+    DLSS5NRWriteInitDiagnostic(TEXT("AfterInitExt"), Device, CoreParameters, RuntimePath, CallerModulePath, AppId, ApiVersion, Result);
     LastNGXResult = Result;
     if (!DLSS5NRNGX::Succeeded(Result))
     {
@@ -254,6 +256,7 @@ bool FDLSS5NRRuntime::EnsureInitialized(ID3D12Device* Device)
     }
 
     const FNGXResult PopulateResult = PopulateParametersFn(CoreParameters);
+    DLSS5NRWriteInitDiagnostic(TEXT("AfterPopulateParameters"), Device, CoreParameters, RuntimePath, CallerModulePath, AppId, ApiVersion, PopulateResult);
     LastNGXResult = PopulateResult;
     if (!DLSS5NRNGX::Succeeded(PopulateResult))
     {
@@ -386,6 +389,7 @@ FDLSS5NRRuntime::FFeatureState* FDLSS5NRRuntime::CreateFeature(const FDLSS5NREva
 
     FNGXHandle* NewHandle = nullptr;
     const FNGXResult Result = CreateFeatureFn(D.CommandList, DLSS5NRNGX::NeuralRenderingFeature, P, &NewHandle);
+    DLSS5NRWriteInitDiagnostic(TEXT("AfterCreateFeature"), InitializedDevice, CoreParameters, RuntimePath, CallerModulePath, GetApplicationId ? GetApplicationId() : 0, GetAPIVersion ? GetAPIVersion() : 0, Result);
     LastNGXResult = Result;
     if (!DLSS5NRNGX::Succeeded(Result) || !NewHandle)
     {
@@ -538,6 +542,8 @@ bool FDLSS5NRRuntime::Evaluate(const FDLSS5NREvaluateDesc& D)
     P->Set("DLSSNR.UICorrection", D.bUICorrection ? 1 : 0);
 
     const FNGXResult Result = EvaluateFeatureFn(D.CommandList, Feature->Handle, P, nullptr);
+    if (SuccessfulFrames == 0)
+        DLSS5NRWriteInitDiagnostic(TEXT("AfterFirstEvaluate"), InitializedDevice, CoreParameters, RuntimePath, CallerModulePath, GetApplicationId ? GetApplicationId() : 0, GetAPIVersion ? GetAPIVersion() : 0, Result);
     LastNGXResult = Result;
     if (!DLSS5NRNGX::Succeeded(Result))
     {

@@ -1,0 +1,23 @@
+#include "/Engine/Public/Platform.ush"
+// Thresholds are in the current post-tonemap buffer's units, not assumed SDR nits.
+Texture2D<float4> OriginalColor;
+Texture2D<float4> NeuralColor;
+int2 RectMin;
+int2 RectSize;
+float PreserveStart;
+float PreserveEnd;
+uint EnableRecovery;
+uint PreserveAlpha;
+RWTexture2D<float4> RecoveredColor;
+
+[numthreads(8,8,1)]
+void HighlightMainCS(uint3 Id : SV_DispatchThreadID)
+{
+    if (any(Id.xy >= uint2(RectSize))) return;
+    int2 Pixel = RectMin + int2(Id.xy);
+    float4 Source = OriginalColor.Load(int3(Pixel,0));
+    float4 NR = NeuralColor.Load(int3(Pixel,0));
+    float Weight = EnableRecovery != 0 && PreserveEnd > PreserveStart
+        ? smoothstep(PreserveStart,PreserveEnd,max(Source.r,max(Source.g,Source.b))) : 0;
+    RecoveredColor[Pixel] = float4(lerp(NR.rgb,Source.rgb,Weight),PreserveAlpha != 0 ? Source.a : NR.a);
+}

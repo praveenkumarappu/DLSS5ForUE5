@@ -8,7 +8,7 @@ static TAutoConsoleVariable<int32> CVarDLSS5NREnable(
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPreset(
     TEXT("r.DLSS5.Preset"), 1,
-    TEXT("DLSS-NR render preset hint. Experimental: 0..3."),
+    TEXT("Opaque runtime preset hint 0..3. Different networks or visual effects are not guaranteed."),
     ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarDLSS5NRPassCount(
@@ -72,11 +72,11 @@ static TAutoConsoleVariable<int32> CVarDLSS5NRDepthInverted(
 
 static TAutoConsoleVariable<float> CVarDLSS5NRMVecScaleX(
     TEXT("r.DLSS5.MVecScaleX"), 1.0f,
-    TEXT("Multiplier applied to automatic X motion-vector normalization (1/view width)."), ECVF_RenderThreadSafe);
+    TEXT("Debug X multiplier on display-pixel motion; 1 is the NGX pixel-space convention."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<float> CVarDLSS5NRMVecScaleY(
     TEXT("r.DLSS5.MVecScaleY"), 1.0f,
-    TEXT("Multiplier applied to automatic Y motion-vector normalization (1/view height)."), ECVF_RenderThreadSafe);
+    TEXT("Debug Y multiplier on display-pixel motion; 1 is the NGX pixel-space convention."), ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<float> CVarDLSS5NRExposureResetRatio(
     TEXT("r.DLSS5.ExposureResetRatio"), 2.0f,
@@ -86,8 +86,18 @@ static TAutoConsoleVariable<int32> CVarDLSS5NRDebug(
     TEXT("r.DLSS5.Debug"), 1,
     TEXT("Verbose DLSS5 logging."), ECVF_RenderThreadSafe);
 
+static TAutoConsoleVariable<int32> CVarHighlight(TEXT("r.DLSS5.HighlightPreserve"),0,
+    TEXT("Optional post-tonemap highlight recovery. Disabled by default; validate thresholds for the output encoding."),ECVF_RenderThreadSafe);
+static TAutoConsoleVariable<float> CVarHighlightStart(TEXT("r.DLSS5.HighlightPreserveStart"),0.7f,
+    TEXT("Recovery start in current post-tonemap buffer units."),ECVF_RenderThreadSafe);
+static TAutoConsoleVariable<float> CVarHighlightEnd(TEXT("r.DLSS5.HighlightPreserveEnd"),0.9f,
+    TEXT("Recovery end. Start >= End disables RGB recovery."),ECVF_RenderThreadSafe);
+
 namespace DLSS5NR
 {
+    int32 GetHighlightPreserve() { return CVarHighlight.GetValueOnRenderThread(); }
+    float GetHighlightStart() { return CVarHighlightStart.GetValueOnRenderThread(); }
+    float GetHighlightEnd() { return CVarHighlightEnd.GetValueOnRenderThread(); }
     int32 GetEnable() { return CVarDLSS5NREnable.GetValueOnRenderThread(); }
     int32 GetPreset() { return CVarDLSS5NRPreset.GetValueOnRenderThread(); }
     int32 GetPassCount() { return CVarDLSS5NRPassCount.GetValueOnRenderThread(); }

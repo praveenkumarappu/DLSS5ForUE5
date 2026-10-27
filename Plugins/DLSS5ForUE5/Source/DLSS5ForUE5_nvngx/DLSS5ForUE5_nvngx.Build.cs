@@ -29,7 +29,8 @@ public class DLSS5ForUE5_nvngx : ModuleRules
             "Projects",
             "RenderCore",
             "Renderer",
-            "RHI"
+            "RHI",
+            "Json"
         });
 
         if (Target.Platform == UnrealTargetPlatform.Win64)

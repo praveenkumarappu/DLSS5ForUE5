@@ -16,6 +16,7 @@
 #include "SceneRendering.h"
 #include "Engine/World.h"
 #include "Misc/ScopeLock.h"
+#include "HAL/IConsoleManager.h"
 
 #if DLSS5NR_WITH_D3D12
 #include "ID3D12DynamicRHI.h"
@@ -210,7 +211,7 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
     FIntRect DepthRect;
     if (bDepthRequested && bDepthAvailable && GuideSourceRect.Width() > 0 && GuideSourceRect.Height() > 0)
     {
-        ResolvedDepth = AddDLSS5NRDepthResolvePass(GraphBuilder, View, SceneDepth, GuideSourceRect);
+        ResolvedDepth = AddDLSS5NRDepthResolvePass(GraphBuilder, View, SceneDepth, GuideSourceRect, ColorRect.Size());
         if (ResolvedDepth)
         {
             DepthRect = FIntRect(FIntPoint::ZeroValue, ResolvedDepth->Desc.Extent);
@@ -219,11 +220,11 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     FRDGTextureRef DenseMotion = nullptr;
     FIntRect MotionRect;
-    if (bMotionRequested && bDepthAvailable && bVelocityAvailable &&
+    if (bMotionRequested && bDepthAvailable &&
         GuideSourceRect.Width() > 0 && GuideSourceRect.Height() > 0)
     {
         DenseMotion = AddDLSS5NRMotionVectorResolvePass(
-            GraphBuilder, View, SceneDepth, SceneVelocity, GuideSourceRect);
+            GraphBuilder, View, SceneDepth, SceneVelocity, GuideSourceRect, ColorRect.Size());
         if (DenseMotion)
         {
             MotionRect = FIntRect(FIntPoint::ZeroValue, DenseMotion->Desc.Extent);
@@ -343,12 +344,11 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
     Config.JitterPixels = JitterPixels;
     Config.PreExposure = PreExposure;
 
-    // Dense motion output is in pixels. Normalize by its own render-resolution dimensions,
-    // then apply the user multiplier for debugging unusual conventions.
+    // Dense motion is already in display pixels. Apply only explicit debug multipliers.
     if (DenseMotion && DenseMotion->Desc.Extent.X > 0 && DenseMotion->Desc.Extent.Y > 0)
     {
-        Config.MVecScaleX = (1.0f / static_cast<float>(DenseMotion->Desc.Extent.X)) * DLSS5NR::GetMVecScaleX();
-        Config.MVecScaleY = (1.0f / static_cast<float>(DenseMotion->Desc.Extent.Y)) * DLSS5NR::GetMVecScaleY();
+        Config.MVecScaleX = DLSS5NR::GetMVecScaleX();
+        Config.MVecScaleY = DLSS5NR::GetMVecScaleY();
     }
 
     FDLSS5NRFrameTelemetry Telemetry;
@@ -502,6 +502,12 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
         FinalNROutput = PassOutput;
     }
 
+    const IConsoleVariable* AlphaCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.PostProcessing.PropagateAlpha"));
+    const bool bPreserveAlpha = AlphaCVar && AlphaCVar->GetInt() != 0;
+    const bool bHighlight = DLSS5NR::GetHighlightPreserve() != 0 && DLSS5NR::GetHighlightEnd() > DLSS5NR::GetHighlightStart();
+    if (bHighlight || bPreserveAlpha)
+        FinalNROutput = AddDLSS5NRHighlightPass(GraphBuilder, View, SceneColor.Texture, FinalNROutput,
+            ColorRect, DLSS5NR::GetHighlightStart(), DLSS5NR::GetHighlightEnd(), bHighlight, bPreserveAlpha);
     const FScreenPassTexture NROutputScreen(FinalNROutput, ColorRect);
 
     if (Inputs.OverrideOutput.IsValid())

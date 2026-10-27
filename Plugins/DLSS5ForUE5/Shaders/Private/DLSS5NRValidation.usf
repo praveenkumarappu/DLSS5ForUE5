@@ -1,0 +1,23 @@
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+#include "/DLSS5NR/Private/DLSS5NRMotionCommon.ush"
+RWStructuredBuffer<float4> Results;
+[numthreads(16,1,1)]
+void ValidationMainCS(uint3 Id:SV_DispatchThreadID)
+{
+    uint i=Id.x;
+    if(i>=16)return;
+    float2 V;
+    if(i<8)
+    {
+        float2 Original=float2(2.0f/1920.0f,-4.0f/1080.0f)*(float(i)-3.0f);
+        V=DecodeVelocityFromTexture(EncodeVelocityToTexture(float3(Original,0))).xy;
+    }
+    else
+    {
+        float4x4 M=float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0.01f,-0.02f,0,1);
+        V=DLSS5NRCameraVelocity(float2(0,0),0.5f,M);
+    }
+    int2 Source=DLSS5NRMapGuide(uint2((i%8)*200,(i%8)*100),int2(1920,1080),int2(32,16),int2(1280,720));
+    Results[i]=float4(DLSS5NRToPixelMotion(V,float2(1920,1080)),float2(Source));
+}

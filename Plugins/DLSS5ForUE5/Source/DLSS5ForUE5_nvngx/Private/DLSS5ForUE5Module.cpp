@@ -4,6 +4,8 @@
 #include "DLSS5NRSettings.h"
 #include "DLSS5NRCVars.h"
 #include "DLSS5NRViewExtension.h"
+#include "DLSS5NRRecovery.h"
+#include "HAL/IConsoleManager.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "Misc/CoreDelegates.h"
@@ -16,14 +18,15 @@
 
 DEFINE_LOG_CATEGORY(LogDLSS5);
 
+FString DLSS5GetVersion()
+{
+    const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("DLSS5ForUE5"));
+    return Plugin ? Plugin->GetDescriptor().VersionName : TEXT("unknown");
+}
+
+
 namespace
 {
-    FString GetPluginVersionLabel()
-    {
-        const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("DLSS5ForUE5"));
-        return Plugin.IsValid() ? Plugin->GetDescriptor().VersionName : TEXT("unknown");
-    }
-
     FString RectString(const FIntRect& Rect)
     {
         return FString::Printf(TEXT("(%d,%d) %dx%d"), Rect.Min.X, Rect.Min.Y, Rect.Width(), Rect.Height());
@@ -36,12 +39,12 @@ namespace
         const bool bDLSSInstalled = NvidiaDLSS.IsValid();
         const bool bDLSSEnabled = bDLSSInstalled && NvidiaDLSS->IsEnabled();
 
-        UE_LOG(LogDLSS5, Display, TEXT("================ DLSS5 %s Status ================"), *GetPluginVersionLabel());
+        UE_LOG(LogDLSS5, Display, TEXT("================ DLSS5 %s Status ================"), *DLSS5GetVersion());
         UE_LOG(LogDLSS5, Display, TEXT("NVIDIA DLSS plugin found/enabled: %s / %s"),
             bDLSSInstalled ? TEXT("YES") : TEXT("NO"), bDLSSEnabled ? TEXT("YES") : TEXT("NO"));
         UE_LOG(LogDLSS5, Display, TEXT("NR runtime loaded/initialized: %s / %s"),
             D.bRuntimeLoaded ? TEXT("YES") : TEXT("NO"), D.bRuntimeInitialized ? TEXT("YES") : TEXT("NO"));
-        UE_LOG(LogDLSS5, Display, TEXT("NGX core / params / snippet / caller gate: %s / %s / %s / %s"),
+        UE_LOG(LogDLSS5, Display, TEXT("NGX core / params / snippet / legacy filename hint (diagnostic only): %s / %s / %s / %s"),
             D.bCoreFound ? TEXT("YES") : TEXT("NO"),
             D.bCoreParameters ? TEXT("YES") : TEXT("NO"),
             D.bSnippetPopulated ? TEXT("YES") : TEXT("NO"),
@@ -50,9 +53,12 @@ namespace
             D.EvaluateAttempts, D.SuccessfulFrames, D.FailedFrames, D.ResetFrames);
         UE_LOG(LogDLSS5, Display, TEXT("Feature size: %dx%d | Last NGX result: 0x%08X"),
             D.FeatureSize.X, D.FeatureSize.Y, D.LastNGXResult);
-        if (const UDLSS5NRSettings* Settings = GetDefault<UDLSS5NRSettings>())
+        for (const TCHAR* Name : {TEXT("r.DLSS5.Enable"), TEXT("r.DLSS5.PassCount"), TEXT("r.DLSS5.Preset"),
+            TEXT("r.DLSS5.Style"), TEXT("r.DLSS5.Intensity"), TEXT("r.DLSS5.EnableSceneGuides"),
+            TEXT("r.DLSS5.FeedSceneGuides"), TEXT("r.DLSS5.UseMotionVectors")})
         {
-            UE_LOG(LogDLSS5, Display, TEXT("Sequential NR pass count: %d"), FMath::Clamp(Settings->PassCount, 1, 4));
+            if (const IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(Name))
+                UE_LOG(LogDLSS5, Display, TEXT("Active %s=%s"), Name, *V->GetString());
         }
         UE_LOG(LogDLSS5, Display, TEXT("Depth (UE scene depth / DLSS host input) requested/available/used: %s / %s / %s | extent %dx%d"),
             D.bDepthRequested ? TEXT("YES") : TEXT("NO"),
@@ -85,7 +91,7 @@ namespace
 
     FAutoConsoleCommand GDLSS5NRStatusCommand(
         TEXT("DLSS5.Status"),
-        TEXT("Print DLSS 5 for UE5 runtime and scene-guide diagnostics."),
+        TEXT("Print DLSS5 runtime/guide diagnostics and active CVars."),
         FConsoleCommandDelegate::CreateStatic(&PrintStatus));
 
     void EnterSafeModeFromConsole()
@@ -97,7 +103,6 @@ namespace
             Settings->bFeedSceneGuides = false;
             Settings->bUseMotionVectors = false;
             Settings->ApplyToCVars();
-            Settings->SaveConfig();
             Settings->RefreshDiagnostics();
             UE_LOG(LogDLSS5, Display, TEXT("DLSS5 Safe Mode enabled."));
         }
@@ -105,7 +110,7 @@ namespace
 
     FAutoConsoleCommand GDLSS5SafeModeCommand(
         TEXT("DLSS5.SafeMode"),
-        TEXT("Disable Neural Rendering and experimental scene-guide execution, then save the safe configuration."),
+        TEXT("Disable Neural Rendering and experimental scene-guide execution, for this process (does not write configuration)."),
         FConsoleCommandDelegate::CreateStatic(&EnterSafeModeFromConsole));
 }
 
@@ -130,7 +135,7 @@ void FDLSS5ForUE5Module::StartupModule()
 #else
     // Loading the snippet DLL is safe here. The NVIDIA driver NGX core is intentionally
     // acquired lazily on the first render evaluation, after UE/NVIDIA have initialized it.
-    if (!FDLSS5NRRuntime::Get().Load())
+    if (!IsRunningCommandlet() && !FDLSS5NRRuntime::Get().Load())
     {
         UE_LOG(LogDLSS5, Error, TEXT("DLSS-NR runtime load failed. Renderer will remain pass-through."));
     }
@@ -142,29 +147,32 @@ void FDLSS5ForUE5Module::StartupModule()
 #else
     PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FDLSS5ForUE5Module::HandlePostEngineInit);
 #endif
-    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 experimental plugin %s bootstrap loaded."), *GetPluginVersionLabel());
+    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 %s bootstrap loaded."), *DLSS5GetVersion());
 #endif
 }
 
 void FDLSS5ForUE5Module::HandlePostEngineInit()
 {
 #if PLATFORM_WINDOWS
+    // Cooking needs shader registration, but must not initialize a neural runtime or
+    // change game-session recovery state in the cooker process.
+    if (IsRunningCommandlet()) return;
     UDLSS5NRSettings* Settings = GetMutableDefault<UDLSS5NRSettings>();
     if (Settings)
     {
-        // Session-safe boot: never restore experimental scene-guide execution automatically.
-        // Config-backed values can survive a previous crash, so a previous session can leave guides enabled
-        // in the user's project config. Force the volatile in-memory settings back to the proven
-        // color-only path on every editor start. The user can explicitly re-enable guides after
-        // the editor is fully running. Do not SaveConfig() here.
-        Settings->bEnableNeuralRendering = false;
-        Settings->bEnableSceneGuides = false;
-        Settings->bFeedSceneGuides = false;
-        Settings->bUseMotionVectors = false;
-        Settings->ApplyToCVars();
+        const bool bRecover = DLSS5NRRecovery::Begin(RecoveryMarker);
+        if (bRecover)
+        {
+            for (const TCHAR* Name : { TEXT("r.DLSS5.Enable"), TEXT("r.DLSS5.EnableSceneGuides"),
+                TEXT("r.DLSS5.FeedSceneGuides"), TEXT("r.DLSS5.UseMotionVectors") })
+                if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(Name)) V->Set(0, ECVF_SetByConsole);
+            UE_LOG(LogDLSS5, Warning, TEXT("NR recovery: a recent NR-active session ended uncleanly. NR/guides are disabled for this process; use r.DLSS5.Enable to re-enable."));
+        }
+        Settings->LoadFromCVars();
+        DLSS5NRRecovery::Update(RecoveryMarker);
         Settings->RefreshDiagnostics();
 
-        UE_LOG(LogDLSS5, Display, TEXT("Safe boot active: Neural Rendering, 3D Scene Guides, guide feed, and motion vectors were forced OFF for this editor session."));
+        UE_LOG(LogDLSS5, Display, TEXT("Launch CVars respected. NR enabled: %d; recovery: %s"), Settings->bEnableNeuralRendering ? 1 : 0, bRecover ? TEXT("YES") : TEXT("NO"));
     }
 
     ViewExtension = FSceneViewExtensions::NewExtension<FDLSS5NRViewExtension>();
@@ -173,14 +181,14 @@ void FDLSS5ForUE5Module::HandlePostEngineInit()
         FTickerDelegate::CreateRaw(this, &FDLSS5ForUE5Module::TickDiagnostics), 0.5f);
 
     const TSharedPtr<IPlugin> NvidiaDLSS = IPluginManager::Get().FindPlugin(TEXT("DLSS"));
-    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 %s renderer ready. NVIDIA DLSS plugin: %s. Artist UI: Tools > DLSS 5 for UE5."),
-        *GetPluginVersionLabel(),
+    UE_LOG(LogDLSS5, Display, TEXT("DLSS 5 for UE5 %s renderer ready. NVIDIA DLSS plugin: %s. UI is editor-only; runtime control: r.DLSS5.Enable."), *DLSS5GetVersion(),
         (NvidiaDLSS.IsValid() && NvidiaDLSS->IsEnabled()) ? TEXT("enabled") : TEXT("not enabled / NGX core may be unavailable"));
 #endif
 }
 
 bool FDLSS5ForUE5Module::TickDiagnostics(float DeltaTime)
 {
+    DLSS5NRRecovery::Update(RecoveryMarker);
     if (UDLSS5NRSettings* Settings = GetMutableDefault<UDLSS5NRSettings>())
     {
         Settings->RefreshDiagnostics();
@@ -219,6 +227,7 @@ void FDLSS5ForUE5Module::ShutdownModule()
     }
     FlushRenderingCommands();
     FDLSS5NRRuntime::Get().Unload();
+    DLSS5NRRecovery::End(RecoveryMarker);
 }
 
 IMPLEMENT_MODULE(FDLSS5ForUE5Module, DLSS5ForUE5_nvngx)

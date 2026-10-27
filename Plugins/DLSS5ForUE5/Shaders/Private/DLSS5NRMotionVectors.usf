@@ -1,36 +1,32 @@
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
+#include "/DLSS5NR/Private/DLSS5NRMotionCommon.ush"
 
 // Dense UE motion-vector guide resolve for NVIDIA DLSS-NR.
-// Output units are pixels. The NGX MVecScaleX/Y values normalize by this guide's extent.
+// Display-pixel displacement, previous minus current; NGX scale is unity.
 
 Texture2D<float> DepthTexture;
 Texture2D<float4> VelocityTexture;
 int2 SourceRectMin;
 int2 SourceRectSize;
+int2 OutputSize;
 uint HasObjectVelocity;
 RWTexture2D<float2> OutputMotionVectors;
 
-float2 DLSS5NRDecodeVelocityXY(float4 EncodedVelocity)
-{
-    const float InvDiv = 1.0f / (0.499f * 0.5f);
-    const float Bias = 32767.0f / 65535.0f;
-    return EncodedVelocity.xy * InvDiv - Bias * InvDiv;
-}
 
 [numthreads(8, 8, 1)]
 void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
     const uint2 LocalPixel = DispatchThreadId.xy;
-    if (LocalPixel.x >= (uint)SourceRectSize.x || LocalPixel.y >= (uint)SourceRectSize.y)
+    if (LocalPixel.x >= (uint)OutputSize.x || LocalPixel.y >= (uint)OutputSize.y)
     {
         return;
     }
 
-    const int2 SourcePixel = int2(LocalPixel) + SourceRectMin;
+    const float2 ViewportUV = (float2(LocalPixel) + 0.5f) / float2(OutputSize);
+    const int2 SourcePixel = DLSS5NRMapGuide(LocalPixel,OutputSize,SourceRectMin,SourceRectSize);
     const float DeviceDepth = DepthTexture.Load(int3(SourcePixel, 0)).r;
 
-    const float2 ViewportUV = (float2(LocalPixel) + 0.5f) / float2(SourceRectSize);
     const float2 CurrentClipXY = float2(ViewportUV.x * 2.0f - 1.0f,
                                        1.0f - ViewportUV.y * 2.0f);
 
@@ -46,21 +42,12 @@ void MotionMainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 
     if (bUseObjectVelocity)
     {
-        VelocityClip = DLSS5NRDecodeVelocityXY(EncodedVelocity);
+        VelocityClip = DecodeVelocityFromTexture(EncodedVelocity).xy;
     }
     else
     {
-        const float4 CurrentClip = float4(CurrentClipXY, DeviceDepth, 1.0f);
-        const float4 PreviousClipH = mul(CurrentClip, View.ClipToPrevClip);
-
-        if (abs(PreviousClipH.w) > 1.0e-6f)
-        {
-            const float2 PreviousClipXY = PreviousClipH.xy / PreviousClipH.w;
-            VelocityClip = CurrentClipXY - PreviousClipXY;
-        }
+        VelocityClip = DLSS5NRCameraVelocity(CurrentClipXY,DeviceDepth,View.ClipToPrevClip);
     }
 
-    const float2 VelocityPixels = VelocityClip * float2(0.5f, -0.5f) * float2(SourceRectSize);
-    // UE velocity is current minus previous; NGX expects previous minus current.
-    OutputMotionVectors[LocalPixel] = -VelocityPixels;
+    OutputMotionVectors[LocalPixel] = DLSS5NRToPixelMotion(VelocityClip,float2(OutputSize));
 }

@@ -12,7 +12,8 @@ FRDGTextureRef AddDLSS5NRDepthResolvePass(
     FRDGBuilder& GraphBuilder,
     const FSceneView& View,
     FRDGTextureRef SceneDepth,
-    const FIntRect& ViewRect);
+    const FIntRect& ViewRect,
+    const FIntPoint& OutputSize);
 
 /**
  * Builds a dense, pixel-space motion-vector texture from UE's sparse/encoded velocity GBuffer.
@@ -25,4 +26,8 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
     const FSceneView& View,
     FRDGTextureRef SceneDepth,
     FRDGTextureRef SceneVelocity,
-    const FIntRect& ViewRect);
+    const FIntRect& ViewRect,
+    const FIntPoint& OutputSize);
+
+FRDGTextureRef AddDLSS5NRHighlightPass(FRDGBuilder&,const FSceneView&,FRDGTextureRef,FRDGTextureRef,
+    const FIntRect&,float,float,bool,bool);

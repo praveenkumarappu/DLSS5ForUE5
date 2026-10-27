@@ -16,6 +16,7 @@ public:
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DepthTexture)
         SHADER_PARAMETER(FIntPoint, SourceRectMin)
         SHADER_PARAMETER(FIntPoint, SourceRectSize)
+        SHADER_PARAMETER(FIntPoint, OutputSize)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float>, OutputDepth)
     END_SHADER_PARAMETER_STRUCT()
 
@@ -37,6 +38,7 @@ public:
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, VelocityTexture)
         SHADER_PARAMETER(FIntPoint, SourceRectMin)
         SHADER_PARAMETER(FIntPoint, SourceRectSize)
+        SHADER_PARAMETER(FIntPoint, OutputSize)
         SHADER_PARAMETER(uint32, HasObjectVelocity)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float2>, OutputMotionVectors)
     END_SHADER_PARAMETER_STRUCT()
@@ -54,14 +56,14 @@ FRDGTextureRef AddDLSS5NRDepthResolvePass(
     FRDGBuilder& GraphBuilder,
     const FSceneView& View,
     FRDGTextureRef SceneDepth,
-    const FIntRect& ViewRect)
+    const FIntRect& ViewRect,
+    const FIntPoint& OutputSize)
 {
     if (!SceneDepth || ViewRect.Width() <= 0 || ViewRect.Height() <= 0)
     {
         return nullptr;
     }
 
-    const FIntPoint OutputSize = ViewRect.Size();
     const FRDGTextureDesc DepthDesc = FRDGTextureDesc::Create2D(
         OutputSize,
         PF_R32_FLOAT,
@@ -74,7 +76,8 @@ FRDGTextureRef AddDLSS5NRDepthResolvePass(
     FDLSS5NRDepthCS::FParameters* Parameters = GraphBuilder.AllocParameters<FDLSS5NRDepthCS::FParameters>();
     Parameters->DepthTexture = SceneDepth;
     Parameters->SourceRectMin = ViewRect.Min;
-    Parameters->SourceRectSize = OutputSize;
+    Parameters->SourceRectSize = ViewRect.Size();
+    Parameters->OutputSize = OutputSize;
     Parameters->OutputDepth = GraphBuilder.CreateUAV(OutputDepth);
 
     FComputeShaderUtils::AddPass(
@@ -92,14 +95,14 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
     const FSceneView& View,
     FRDGTextureRef SceneDepth,
     FRDGTextureRef SceneVelocity,
-    const FIntRect& ViewRect)
+    const FIntRect& ViewRect,
+    const FIntPoint& OutputSize)
 {
-    if (!SceneDepth || !SceneVelocity || ViewRect.Width() <= 0 || ViewRect.Height() <= 0)
+    if (!SceneDepth || ViewRect.Width() <= 0 || ViewRect.Height() <= 0)
     {
         return nullptr;
     }
 
-    const FIntPoint OutputSize = ViewRect.Size();
     const FRDGTextureDesc MotionDesc = FRDGTextureDesc::Create2D(
         OutputSize,
         PF_G32R32F,
@@ -111,7 +114,7 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
     // UE may bind a 1x1 black velocity texture when no object-velocity buffer exists. In that
     // case the shader reconstructs camera motion for every pixel from depth + ClipToPrevClip.
     const bool bVelocityCoversView =
-        SceneVelocity->Desc.Extent.X >= ViewRect.Max.X &&
+        SceneVelocity && SceneVelocity->Desc.Extent.X >= ViewRect.Max.X &&
         SceneVelocity->Desc.Extent.Y >= ViewRect.Max.Y &&
         SceneVelocity->Desc.Extent.X > 1 &&
         SceneVelocity->Desc.Extent.Y > 1;
@@ -120,9 +123,10 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
     FDLSS5NRMotionVectorCS::FParameters* Parameters = GraphBuilder.AllocParameters<FDLSS5NRMotionVectorCS::FParameters>();
     Parameters->View = View.ViewUniformBuffer;
     Parameters->DepthTexture = SceneDepth;
-    Parameters->VelocityTexture = SceneVelocity;
+    Parameters->VelocityTexture = SceneVelocity ? SceneVelocity : SceneDepth;
     Parameters->SourceRectMin = ViewRect.Min;
-    Parameters->SourceRectSize = OutputSize;
+    Parameters->SourceRectSize = ViewRect.Size();
+    Parameters->OutputSize = OutputSize;
     Parameters->HasObjectVelocity = bVelocityCoversView ? 1u : 0u;
     Parameters->OutputMotionVectors = GraphBuilder.CreateUAV(OutputMotion);
 
@@ -134,4 +138,41 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
         FComputeShaderUtils::GetGroupCount(OutputSize, FIntPoint(8, 8)));
 
     return OutputMotion;
+}
+
+
+class FDLSS5NRHighlightCS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FDLSS5NRHighlightCS);
+    SHADER_USE_PARAMETER_STRUCT(FDLSS5NRHighlightCS,FGlobalShader);
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, OriginalColor)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, NeuralColor)
+        SHADER_PARAMETER(FIntPoint, RectMin)
+        SHADER_PARAMETER(FIntPoint, RectSize)
+        SHADER_PARAMETER(float, PreserveStart)
+        SHADER_PARAMETER(float, PreserveEnd)
+        SHADER_PARAMETER(uint32, EnableRecovery)
+        SHADER_PARAMETER(uint32, PreserveAlpha)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, RecoveredColor)
+    END_SHADER_PARAMETER_STRUCT()
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& P)
+    { return IsFeatureLevelSupported(P.Platform,ERHIFeatureLevel::SM5); }
+};
+IMPLEMENT_GLOBAL_SHADER(FDLSS5NRHighlightCS,"/DLSS5NR/Private/DLSS5NRHighlightPreserve.usf","HighlightMainCS",SF_Compute);
+
+FRDGTextureRef AddDLSS5NRHighlightPass(FRDGBuilder& GraphBuilder,const FSceneView& View,
+    FRDGTextureRef Original,FRDGTextureRef Neural,const FIntRect& Rect,
+    float Start,float End,bool bEnable,bool bAlpha)
+{
+    FRDGTextureRef Output=GraphBuilder.CreateTexture(Neural->Desc,TEXT("DLSS5NR.HighlightRecovery"));
+    auto* P=GraphBuilder.AllocParameters<FDLSS5NRHighlightCS::FParameters>();
+    P->OriginalColor=Original;P->NeuralColor=Neural;P->RectMin=Rect.Min;P->RectSize=Rect.Size();
+    P->PreserveStart=Start;P->PreserveEnd=End;P->EnableRecovery=bEnable;P->PreserveAlpha=bAlpha;
+    P->RecoveredColor=GraphBuilder.CreateUAV(Output);
+    TShaderMapRef<FDLSS5NRHighlightCS> Shader(GetGlobalShaderMap(View.GetFeatureLevel()));
+    FComputeShaderUtils::AddPass(GraphBuilder,RDG_EVENT_NAME("DLSS5NR Optional Highlight/Alpha Recovery"),
+        Shader,P,FComputeShaderUtils::GetGroupCount(Rect.Size(),FIntPoint(8,8)));
+    return Output;
 }

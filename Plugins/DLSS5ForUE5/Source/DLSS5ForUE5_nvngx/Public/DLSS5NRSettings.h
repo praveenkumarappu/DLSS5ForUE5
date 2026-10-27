@@ -30,6 +30,7 @@ public:
 #endif
 
     void ApplyToCVars() const;
+    void LoadFromCVars();
     void RefreshDiagnostics();
 
     // ---------------- General ----------------
@@ -66,7 +67,7 @@ public:
     bool bUICorrection = false;
 
     // ---------------- Scene Guides ----------------
-    UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (DisplayName = "Enable 3D Scene Guides (Experimental)", ToolTip = "Master safety switch for depth and motion-vector guides. Off keeps the proven v0.3 color-only path. This is forced OFF on every editor startup for crash-safe recovery. Enable only after the editor is fully running."))
+    UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (DisplayName = "Enable 3D Scene Guides (Experimental)", ToolTip = "Master safety switch for depth and motion-vector guides. Off keeps the proven v0.3 color-only path. Defaults off. Configuration is respected; recovery can disable NR after an unclean NR-active session."))
     bool bEnableSceneGuides = false;
 
     UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (EditCondition = "bEnableSceneGuides", DisplayName = "Feed Scene Guides Into NR (Experimental)", ToolTip = "Safe staging switch. Off generates/diagnoses guide textures without handing them to NGX. Turn this on only after guide generation is stable."))
@@ -75,7 +76,7 @@ public:
     UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (EditCondition = "bEnableSceneGuides", DisplayName = "Use DLSS Input Depth (UE Scene Depth)", ToolTip = "Uses Unreal Engine scene depth, which is the host depth source that DLSS/Streamline consumes. DLSS does not generate a separate depth buffer. Falls back to color-only if unavailable."))
     bool bUseDepth = true;
 
-    UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (EditCondition = "bEnableSceneGuides", DisplayName = "Use DLSS-Compatible Motion Vectors", ToolTip = "Builds a dense pixel-space motion-vector guide from UE depth + GBuffer velocity. Forced OFF on every editor startup until depth-only guide generation/feed is validated."))
+    UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (EditCondition = "bEnableSceneGuides", DisplayName = "Use DLSS-Compatible Motion Vectors", ToolTip = "Builds a dense pixel-space motion-vector guide from UE depth + GBuffer velocity. Defaults off; enable after guide validation."))
     bool bUseMotionVectors = false;
 
     UPROPERTY(EditAnywhere, Config, Category = "Scene Guides", meta = (DisplayName = "Automatic History Reset", ToolTip = "Resets NR temporal history on camera cuts, forced camera resets, first frame, viewport-size changes, and major exposure discontinuities."))

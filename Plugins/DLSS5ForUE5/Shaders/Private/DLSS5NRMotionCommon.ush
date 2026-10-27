@@ -1,0 +1,19 @@
+#ifndef DLSS5NR_MOTION_COMMON
+#define DLSS5NR_MOTION_COMMON
+float2 DLSS5NRToPixelMotion(float2 ClipVelocity, float2 DisplaySize)
+{
+    return -ClipVelocity * float2(0.5f,-0.5f) * DisplaySize;
+}
+int2 DLSS5NRMapGuide(uint2 Pixel,int2 OutputSize,int2 SourceMin,int2 SourceSize)
+{
+    // Integer pixel-center mapping avoids a GPU reciprocal approximation selecting
+    // the preceding texel at exact rational boundaries (e.g. 720 -> 1080).
+    uint2 Numerator=(2u*Pixel+1u)*uint2(SourceSize);
+    return SourceMin + min(int2(Numerator/(2u*uint2(OutputSize))),SourceSize-1);
+}
+float2 DLSS5NRCameraVelocity(float2 CurrentXY,float Depth,float4x4 ClipToPrevious)
+{
+    float4 Previous=mul(float4(CurrentXY,Depth,1),ClipToPrevious);
+    return Previous.w>1.0e-6f ? CurrentXY-Previous.xy/Previous.w : float2(0,0);
+}
+#endif

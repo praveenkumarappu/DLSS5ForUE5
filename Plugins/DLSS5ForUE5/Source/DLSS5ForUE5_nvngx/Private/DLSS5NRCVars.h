@@ -4,6 +4,9 @@
 
 namespace DLSS5NR
 {
+    int32 GetHighlightPreserve();
+    float GetHighlightStart();
+    float GetHighlightEnd();
     extern int32 GetEnable();
     extern int32 GetPreset();
     extern int32 GetPassCount();

@@ -1,4 +1,5 @@
 #include "DLSS5ForUE5EditorModule.h"
+#include "DLSS5ForUE5Module.h"
 
 #include "DLSS5NRSettings.h"
 
@@ -26,7 +27,7 @@
 namespace
 {
     const FName DLSS5ForUE5TabName(TEXT("DLSS5ForUE5"));
-    const TCHAR* DLSS5BuildStamp = TEXT("2026-09-14");
+    const TCHAR* DLSS5BuildStamp = TEXT("2026-10-27");
 
     int32 GetPassCount()
     {
@@ -47,7 +48,6 @@ namespace
         {
             Settings->PassCount = NewCount;
             Settings->ApplyToCVars();
-            Settings->SaveConfig();
             Settings->RefreshDiagnostics();
         }
     }
@@ -207,6 +207,7 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
 
     if (UDLSS5NRSettings* Settings = GetMutableDefault<UDLSS5NRSettings>())
     {
+        Settings->LoadFromCVars();
         Settings->RefreshDiagnostics();
         DetailsView->SetObject(Settings);
     }
@@ -406,7 +407,7 @@ TSharedRef<SDockTab> FDLSS5ForUE5EditorModule::SpawnPluginTab(const FSpawnTabArg
                     .AutoHeight()
                     [
                         SNew(STextBlock)
-                        .Text(FText::FromString(FString::Printf(TEXT("Version: 0.6.0 Stable  |  Build: %s"), DLSS5BuildStamp)))
+                        .Text(FText::FromString(FString::Printf(TEXT("Version: %s  |  Build: %s"), *DLSS5GetVersion(), DLSS5BuildStamp)))
                     ]
                 ]
             ]
@@ -433,7 +434,6 @@ FReply FDLSS5ForUE5EditorModule::EnterSafeMode()
         Settings->bFeedSceneGuides = false;
         Settings->bUseMotionVectors = false;
         Settings->ApplyToCVars();
-        Settings->SaveConfig();
         Settings->RefreshDiagnostics();
     }
 

@@ -140,6 +140,22 @@ bool FDLSS5NRRuntimeRegressionTest::RunTest(const FString&)
     Runtime.Evaluate(D);
     TestEqual(TEXT("Recovery after failed evaluate resets history"), LastReset, 1);
 
+    D.bReset = true;
+    ++D.FrameNumber; Runtime.Evaluate(D);
+    TestEqual(TEXT("Explicit camera/exposure reset reaches NGX"), LastReset, 1);
+    D.bReset = false;
+    ++D.FrameNumber; Runtime.Evaluate(D);
+    TestEqual(TEXT("History resumes after explicit reset"), LastReset, 0);
+    D.ColorRect = D.OutputRect = FIntRect(0, 0, 1920, 1080);
+    ++D.FrameNumber; Runtime.Evaluate(D);
+    TestEqual(TEXT("Resize starts a fresh history"), LastReset, 1);
+    for (uint32 Pass = 0; Pass < 4; ++Pass)
+    {
+        D.HistoryKey = (uint64(20) << 32) | Pass;
+        Runtime.Evaluate(D);
+        TestEqual(TEXT("Each of four sequential passes starts isolated"), LastReset, 1);
+    }
+
     // Test double simulates the caller's shutdown GPU drain.
     Runtime.ReleaseAllFeaturesAfterGPUIdle();
     TestEqual(TEXT("Shutdown releases every created handle exactly once"), ReleasedHandles, NextHandle);

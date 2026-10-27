@@ -11,7 +11,7 @@ namespace
     {
         if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
         {
-            CVar->Set(Value, ECVF_SetByProjectSetting);
+            CVar->Set(Value, ECVF_SetByConsole);
         }
     }
 
@@ -19,7 +19,7 @@ namespace
     {
         if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
         {
-            CVar->Set(Value, ECVF_SetByProjectSetting);
+            CVar->Set(Value, ECVF_SetByConsole);
         }
     }
 
@@ -38,6 +38,30 @@ UDLSS5NRSettings::UDLSS5NRSettings()
     DiagnosticTemporal = TEXT("Waiting for renderer...");
     DiagnosticCounters = TEXT("0 attempts / 0 successful / 0 failed");
     DiagnosticLastResult = TEXT("No evaluation yet");
+}
+
+void UDLSS5NRSettings::LoadFromCVars()
+{
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.Enable"))) bEnableNeuralRendering = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.Style"))) Style = static_cast<EDLSS5NRStyle>(FMath::Clamp(V->GetInt(), 0, 1));
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.Preset"))) Preset = V->GetInt();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.PassCount"))) PassCount = V->GetInt();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.Intensity"))) Intensity = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.LocalTone"))) LocalTone = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.LocalStructure"))) LocalStructure = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.SkinStructure"))) SkinStructure = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.AutoMask"))) bAutoMask = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.UICorrection"))) bUICorrection = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.EnableSceneGuides"))) bEnableSceneGuides = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.FeedSceneGuides"))) bFeedSceneGuides = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.UseDepth"))) bUseDepth = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.UseMotionVectors"))) bUseMotionVectors = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.AutoResetHistory"))) bAutoResetHistory = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.DepthInverted"))) bDepthInverted = V->GetInt() != 0;
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.MVecScaleX"))) MotionScaleXMultiplier = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.MVecScaleY"))) MotionScaleYMultiplier = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.ExposureResetRatio"))) ExposureResetRatio = V->GetFloat();
+    if (IConsoleVariable* V = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DLSS5.Debug"))) bVerboseDiagnostics = V->GetInt() != 0;
 }
 
 void UDLSS5NRSettings::ApplyToCVars() const
@@ -69,7 +93,6 @@ void UDLSS5NRSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 {
     Super::PostEditChangeProperty(PropertyChangedEvent);
     ApplyToCVars();
-    SaveConfig();
 }
 #endif
 
@@ -78,11 +101,11 @@ void UDLSS5NRSettings::RefreshDiagnostics()
     const FDLSS5NRDiagnosticsSnapshot D = FDLSS5NRRuntime::Get().GetDiagnosticsSnapshot();
 
     DiagnosticRuntime = FString::Printf(
-        TEXT("Runtime %s | Core %s | Core params %s | Caller gate %s"),
+        TEXT("Runtime %s | Core %s | Core params %s | Legacy filename hint %s (diagnostic only)"),
         D.bRuntimeLoaded ? TEXT("READY") : TEXT("NOT LOADED"),
         D.bCoreFound ? TEXT("READY") : TEXT("WAITING"),
         D.bCoreParameters ? TEXT("READY") : TEXT("WAITING"),
-        D.bCallerGateReady ? TEXT("READY") : TEXT("FAILED"));
+        D.bCallerGateReady ? TEXT("PRESENT") : TEXT("ABSENT"));
 
     DiagnosticNGX = FString::Printf(
         TEXT("Initialized %s | Snippet %s | Feature %dx%d | Passes %d"),
