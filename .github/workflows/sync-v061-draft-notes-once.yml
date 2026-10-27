@@ -1,4 +1,4 @@
-name: One-time v0.6.1 draft release description sync
+name: One-time restore v0.6.1 draft tag label
 
 on:
   push:
@@ -10,57 +10,39 @@ permissions:
   contents: write
 
 jobs:
-  update-existing-draft:
+  restore-tag:
     runs-on: ubuntu-latest
     steps:
-      - name: Remove outdated highlight from uploaded v0.6.1 draft
+      - name: Set tag label for existing draft, without publishing
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const releases = await github.paginate(github.rest.repos.listReleases, {
-              owner, repo, per_page: 100
+            const releaseId = 425483586;
+            const result = await github.rest.repos.getRelease({
+              owner, repo, release_id: releaseId
             });
-            const release = releases.find(r => r.tag_name === 'v0.6.1' && r.draft);
-            if (!release) {
-              core.setFailed('Expected existing unpublished v0.6.1 draft not found.');
+            const draft = result.data;
+            if (!draft.draft || draft.name !== 'DLSS5ForUE5 v0.6.1') {
+              core.setFailed('Existing release must remain the v0.6.1 draft.');
               return;
             }
-            const expected = [
-              'DLSS5ForUE5-v0.6.1-UE5.5-Editor-Win64.zip',
-              'DLSS5ForUE5-v0.6.1-UE5.6-Editor-Win64.zip',
-              'DLSS5ForUE5-v0.6.1-UE5.7-Editor-Win64.zip',
-              'DLSS5ForUE5-v0.6.1-UE5.8-Editor-Win64.zip'
-            ];
-            if (release.assets.length !== 4 ||
-                !expected.every(n => release.assets.some(a => a.name === n))) {
-              core.setFailed('Draft assets do not match the four original ZIPs.');
+            if (draft.assets.length !== 4 || !draft.body.includes('## Compatibility') ||
+                draft.body.includes('**Rebuilt for UE 5.5')) {
+              core.setFailed('Draft assets/description failed verification.');
               return;
             }
-            const before = (release.body || '').replace(/\r\n/g, '\n');
-            const obsolete = /^- \*\*Rebuilt for UE 5\.5, 5\.6, 5\.7, and 5\.8:\*\*.*(?:\n|$)/m;
-            if (!obsolete.test(before)) {
-              core.setFailed('Expected obsolete build-date highlight was not found. Draft left unchanged.');
+            if (draft.tag_name === 'v0.6.1') {
+              core.info('Draft tag label is already correct.');
               return;
             }
-            let after = before.replace(obsolete, '');
-            const marker = '\n## Maintainer verification\n';
-            if (!after.includes('## Compatibility')) {
-              if (!after.includes(marker)) {
-                core.setFailed('Expected compatibility insertion point missing. Draft left unchanged.');
-                return;
-              }
-              const section = '\n## Compatibility\n\nEditor Win64 builds are provided for **Unreal Engine 5.5, 5.6, 5.7 and 5.8**. Choose the ZIP matching your engine version.\n';
-              after = after.replace(marker, section + marker);
-            }
-            const required = ['## Runtime provenance and distribution review',
-              '## Checksums', '## Contribution acknowledgement', '## Limitations'];
-            if (!required.every(s => after.includes(s))) {
-              core.setFailed('Draft notices/checksums were unexpectedly altered. Update aborted.');
-              return;
-            }
-            await github.rest.repos.updateRelease({
-              owner, repo, release_id: release.id, body: after
+            const updated = await github.rest.repos.updateRelease({
+              owner, repo, release_id: releaseId, tag_name: 'v0.6.1',
+              target_commitish: 'main'
             });
-            core.info('Updated only the existing v0.6.1 draft release body.');
-            core.info('Four previously uploaded assets preserved; release remains a draft.');
+            if (updated.data.tag_name !== 'v0.6.1' || !updated.data.draft ||
+                updated.data.assets.length !== 4) {
+              core.setFailed('Draft tag label update was not verified.');
+              return;
+            }
+            core.info('Restored tag label v0.6.1. Four assets preserved. No publication.');
