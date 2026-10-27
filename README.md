@@ -1,5 +1,12 @@
 # DLSS5ForUE5
 
+[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%E2%80%935.8-313131?style=flat-square&logo=unrealengine&logoColor=white)](docs/INSTALLATION.md)
+[![Windows Editor](https://img.shields.io/badge/Windows-Editor%20Win64-0078D4?style=flat-square&logo=windows&logoColor=white)](docs/INSTALLATION.md)
+[![NVIDIA RTX](https://img.shields.io/badge/NVIDIA-RTX%20GPU-76B900?style=flat-square&logo=nvidia&logoColor=white)](#requirements)
+[![DirectX 12](https://img.shields.io/badge/Graphics-DirectX%2012-4B5563?style=flat-square)](#requirements)
+[![Neural Rendering](https://img.shields.io/badge/Feature-Neural%20Rendering-4B5563?style=flat-square)](#features)
+[![Movie Render Queue](https://img.shields.io/badge/MRQ-Maintainer%20tested%20UE%205.6%20%26%205.8-4B5563?style=flat-square)](#engine-compatibility-and-validation-scope)
+
 **Experimental DLSS 5 Neural Rendering integration for Unreal Engine 5.5-5.8**
 
 DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neural Rendering into the UE editor on D3D12. It provides artist-facing controls, UE scene guides, temporal data, live diagnostics, Safe Mode, and optional 1-4 sequential Neural Rendering passes.
@@ -78,7 +85,7 @@ The maintained source baseline is **v0.6.1**. The plugin provides experimental N
 | UE 5.7 | Rebuilt successfully; fresh maintainer viewport/MRQ confirmation pending |
 | UE 5.8 | Rebuilt; maintainer-confirmed Neural Rendering in viewport and MRQ |
 
-The final rebuild corrected the Editor About build date to **2026-10-27**, with the plugin descriptor still labeled **0.6.1 Validation Build** to match the tested packages.
+The plugin descriptor remains **0.6.1 Validation Build** to match the verified precompiled packages.
 
 **Packaged Development and Shipping native Neural Rendering remain unsupported.** Earlier packaged runtime experiments failed NGX initialization (`NVSDK_NGX_D3D12_Init_Ext`, `0xBAD00002`) with no successful native NR evaluations. Editor/MRQ success is not evidence of packaged-game NR functionality.
 
@@ -89,7 +96,6 @@ The final rebuild corrected the Editor About build date to **2026-10-27**, with 
 - Improved display-pixel motion-vector guidance and depth/motion resolution alignment.
 - Optional highlight preservation to retain bright tonemapped details.
 - Improved launch-CVar and Editor control synchronization.
-- Updated cross-version Editor binaries and build-date metadata.
 
 See [v0.6.1 release notes](RELEASE_NOTES_v0.6.1.md) and [contributor credits](CONTRIBUTORS.md) for the precise adopted changes and remaining limitations.
 
@@ -147,9 +153,9 @@ r.DLSS5.UseMotionVectors
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full list.
 
-## Known issue: Movie Render Queue / Streamline
+## Compatibility note: Movie Render Queue / Streamline
 
-Certain NVIDIA Streamline plugin builds can assert when Movie Render Queue starts a PIE-style render session. The observed crash originates inside NVIDIA's `StreamlineRHI::OnBeginPIE()` rather than DLSS5ForUE5.
+A Streamline PIE assertion was reported with v0.6.0 in a specific UE 5.8 MRQ configuration. The maintainer's v0.6.1 MRQ tests on UE 5.6 and 5.8 succeeded, but that does not establish an upstream fix for all NVIDIA Streamline configurations.
 
 See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for details and workarounds.
 
