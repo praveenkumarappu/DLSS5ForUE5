@@ -1,0 +1,66 @@
+name: One-time v0.6.1 draft release description sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-v061-draft-notes-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-existing-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove outdated highlight from uploaded v0.6.1 draft
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner, repo, per_page: 100
+            });
+            const release = releases.find(r => r.tag_name === 'v0.6.1' && r.draft);
+            if (!release) {
+              core.setFailed('Expected existing unpublished v0.6.1 draft not found.');
+              return;
+            }
+            const expected = [
+              'DLSS5ForUE5-v0.6.1-UE5.5-Editor-Win64.zip',
+              'DLSS5ForUE5-v0.6.1-UE5.6-Editor-Win64.zip',
+              'DLSS5ForUE5-v0.6.1-UE5.7-Editor-Win64.zip',
+              'DLSS5ForUE5-v0.6.1-UE5.8-Editor-Win64.zip'
+            ];
+            if (release.assets.length !== 4 ||
+                !expected.every(n => release.assets.some(a => a.name === n))) {
+              core.setFailed('Draft assets do not match the four original ZIPs.');
+              return;
+            }
+            const before = (release.body || '').replace(/\r\n/g, '\n');
+            const obsolete = /^- \*\*Rebuilt for UE 5\.5, 5\.6, 5\.7, and 5\.8:\*\*.*(?:\n|$)/m;
+            if (!obsolete.test(before)) {
+              core.setFailed('Expected obsolete build-date highlight was not found. Draft left unchanged.');
+              return;
+            }
+            let after = before.replace(obsolete, '');
+            const marker = '\n## Maintainer verification\n';
+            if (!after.includes('## Compatibility')) {
+              if (!after.includes(marker)) {
+                core.setFailed('Expected compatibility insertion point missing. Draft left unchanged.');
+                return;
+              }
+              const section = '\n## Compatibility\n\nEditor Win64 builds are provided for **Unreal Engine 5.5, 5.6, 5.7 and 5.8**. Choose the ZIP matching your engine version.\n';
+              after = after.replace(marker, section + marker);
+            }
+            const required = ['## Runtime provenance and distribution review',
+              '## Checksums', '## Contribution acknowledgement', '## Limitations'];
+            if (!required.every(s => after.includes(s))) {
+              core.setFailed('Draft notices/checksums were unexpectedly altered. Update aborted.');
+              return;
+            }
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id: release.id, body: after
+            });
+            core.info('Updated only the existing v0.6.1 draft release body.');
+            core.info('Four previously uploaded assets preserved; release remains a draft.');
