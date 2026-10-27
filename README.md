@@ -6,16 +6,16 @@ DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neu
 
 > **Unofficial community project.** DLSS5ForUE5 is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation or Epic Games, Inc.
 
-![DLSS5ForUE5 v0.6.0 editor window](docs/images/02-main-ui.png)
+![DLSS5ForUE5 editor window](docs/images/02-main-ui.png)
 
 ## Download
 
 Download the precompiled plugin from the [Releases page](https://github.com/praveenkumarappu/DLSS5ForUE5/releases) and use the ZIP matching your Unreal Engine version:
 
-- `DLSS5ForUE5.v0.6.0.-UE5.5.zip`
-- `DLSS5ForUE5.v0.6.0.-UE5.6.zip`
-- `DLSS5ForUE5.v0.6.0.-UE5.7.zip`
-- `DLSS5ForUE5.v0.6.0.-UE5.8.zip`
+- `DLSS5ForUE5-v0.6.1-UE5.5-Editor-Win64.zip`
+- `DLSS5ForUE5-v0.6.1-UE5.6-Editor-Win64.zip`
+- `DLSS5ForUE5-v0.6.1-UE5.7-Editor-Win64.zip`
+- `DLSS5ForUE5-v0.6.1-UE5.8-Editor-Win64.zip`
 
 The GitHub repository contains the universal source code. Normal users do **not** need to compile the plugin when using the matching release ZIP.
 
@@ -69,18 +69,29 @@ Precompiled release ZIPs include Unreal Engine-specific plugin binaries; Visual 
 
 ## Engine compatibility and validation scope
 
-The maintained stable baseline is **v0.6.0**. Neural Rendering remains experimental and editor-focused; "stable" does not mean that every engine, GPU, driver, or packaged configuration has been independently validated.
+The maintained source baseline is **v0.6.1**. The plugin provides experimental NVIDIA Neural Rendering in Unreal Editor on Windows with D3D12. A successful compile does not independently verify rendering on every engine, GPU, driver or Movie Render Queue configuration.
 
-| Unreal Engine | v0.6.0 runtime validation |
+| Unreal Engine | v0.6.1 Editor Win64 status |
 | --- | --- |
-| UE 5.5 | Maintainer-tested editor NR lifetime update with 3D scene guides |
-| UE 5.6 | Maintainer-tested editor NR lifetime update with 3D scene guides |
-| UE 5.7 | Compatibility target; equivalent v0.6.0 runtime checks pending |
-| UE 5.8 | Compatibility target; equivalent v0.6.0 runtime checks pending |
+| UE 5.5 | Rebuilt successfully; fresh maintainer viewport/MRQ confirmation pending |
+| UE 5.6 | Rebuilt; maintainer-confirmed Neural Rendering in viewport and MRQ |
+| UE 5.7 | Rebuilt successfully; fresh maintainer viewport/MRQ confirmation pending |
+| UE 5.8 | Rebuilt; maintainer-confirmed Neural Rendering in viewport and MRQ |
 
-These are existing maintainer validation claims, not new tests performed by this documentation update. See [runtime validation](docs/NR_RUNTIME_VALIDATION.md) for the test scope.
+The final rebuild corrected the Editor About build date to **2026-10-27**, with the plugin descriptor still labeled **0.6.1 Validation Build** to match the tested packages.
 
-**Packaged Development and Shipping native Neural Rendering are unsupported for this baseline.** A separate v0.6.1 validation build failed NGX initialization with `NVSDK_NGX_D3D12_Init_Ext` returning `0xBAD00002` and zero successful native evaluations. Those results are not direct v0.6.0 validation, and successful packaging or fallback rendering does not establish native inference support.
+**Packaged Development and Shipping native Neural Rendering remain unsupported.** Earlier packaged runtime experiments failed NGX initialization (`NVSDK_NGX_D3D12_Init_Ext`, `0xBAD00002`) with no successful native NR evaluations. Editor/MRQ success is not evidence of packaged-game NR functionality.
+
+### What's new in v0.6.1
+
+- NVIDIA Neural Rendering runtime updated to **310.9.16.0** in the Editor release packages.
+- Maintainer-confirmed Movie Render Queue and viewport output in **UE 5.6 and UE 5.8**.
+- Improved display-pixel motion-vector guidance and depth/motion resolution alignment.
+- Optional highlight preservation to retain bright tonemapped details.
+- Improved launch-CVar and Editor control synchronization.
+- Updated cross-version Editor binaries and build-date metadata.
+
+See [v0.6.1 release notes](RELEASE_NOTES_v0.6.1.md) and [contributor credits](CONTRIBUTORS.md) for the precise adopted changes and remaining limitations.
 
 ## Features
 
@@ -169,8 +180,10 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the complete acknowledgements, includ
 - [Known Issues](docs/KNOWN_ISSUES.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Release Notes](RELEASE_NOTES_v0.6.0.md)
-- [SHA-256 Checksums](SHA256SUMS_v0.6.0.txt)
+- [v0.6.1 Release Notes](RELEASE_NOTES_v0.6.1.md)
+- [v0.6.0 Release Notes](RELEASE_NOTES_v0.6.0.md)
+- [v0.6.1 SHA-256 Checksums](SHA256SUMS_v0.6.1.txt)
+- [v0.6.0 SHA-256 Checksums](SHA256SUMS_v0.6.0.txt)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
