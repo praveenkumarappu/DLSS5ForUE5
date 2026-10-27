@@ -38,6 +38,6 @@ DLSS does not generate an independent superior scene-depth buffer. The host appl
 
 The dense motion guide combines available object velocity with camera/background reprojection from depth and current/previous transforms. Object velocity coverage remains experimental.
 
-## Caller gate
+## Caller module diagnostics
 
-The tested runtime checks that the caller module path contains `nvngx.dll`. The runtime Unreal module name intentionally ends in `_nvngx` so its generated `.dll` satisfies that path check.
+The integration records the Unreal runtime module path and checks for a legacy `nvngx.dll` filename hint. In v0.6.1 that hint is **diagnostic only**, not a supported security bypass or a hard requirement: the DLL's actual NGX initialization result determines whether Neural Rendering can run. Do not rename modules or binaries as a troubleshooting workaround.
