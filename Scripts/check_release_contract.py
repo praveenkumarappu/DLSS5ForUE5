@@ -87,7 +87,7 @@ for line in checksums.splitlines():
         zip_records[m.group(2)] = m.group(1)
 
 for ue in ("5.5", "5.6", "5.7", "5.8"):
-    expected = f"DLSS5ForUE5-v0.6.1-UE{ue}-Editor-Win64.zip"
+    expected = f"DLSS5ForUE5.v0.6.1.-UE{ue}.zip"
     check(expected in zip_records, f"Release checksum missing: UE {ue}")
     check(expected in readme or expected in notes, f"Release archive not documented: {expected}")
 check("DLSS5ForUE5-v0.6.1-SOURCE.zip" in zip_records,
