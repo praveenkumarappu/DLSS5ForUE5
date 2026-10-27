@@ -19,10 +19,10 @@ DLSS5ForUE5 is an unofficial Unreal Engine plugin that integrates NVIDIA NGX Neu
 
 Download the precompiled plugin from the [Releases page](https://github.com/praveenkumarappu/DLSS5ForUE5/releases) and use the ZIP matching your Unreal Engine version:
 
-- `DLSS5ForUE5-v0.6.1-UE5.5-Editor-Win64.zip`
-- `DLSS5ForUE5-v0.6.1-UE5.6-Editor-Win64.zip`
-- `DLSS5ForUE5-v0.6.1-UE5.7-Editor-Win64.zip`
-- `DLSS5ForUE5-v0.6.1-UE5.8-Editor-Win64.zip`
+- `DLSS5ForUE5.v0.6.1.-UE5.5.zip`
+- `DLSS5ForUE5.v0.6.1.-UE5.6.zip`
+- `DLSS5ForUE5.v0.6.1.-UE5.7.zip`
+- `DLSS5ForUE5.v0.6.1.-UE5.8.zip`
 
 The GitHub repository contains the universal source code. Normal users do **not** need to compile the plugin when using the matching release ZIP.
 
