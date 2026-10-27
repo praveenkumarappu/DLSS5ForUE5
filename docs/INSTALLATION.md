@@ -1,4 +1,4 @@
-# Installation - v0.6.0 stable baseline
+# Installation - v0.6.1 Editor release
 
 ## Precompiled release installation
 
