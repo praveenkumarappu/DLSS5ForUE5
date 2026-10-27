@@ -19,3 +19,16 @@ jobs:
         run: python3 Scripts/check_public_text.py
       - name: Validate release documentation contract
         run: python3 Scripts/check_release_contract.py
+      - name: Parse PowerShell project installer
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "INSTALL_TO_PROJECT.ps1"),
+            [ref]$tokens, [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
