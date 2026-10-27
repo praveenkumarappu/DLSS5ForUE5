@@ -32,7 +32,7 @@ Scene Guides, depth and temporal tracking can significantly reduce flicker. Vali
 
 ## UI is difficult to click / sliders lose focus
 
-Use v0.5.3 or newer. The live diagnostics panel no longer force-refreshes the editable DetailsView.
+Use the current v0.6.1 Editor build. If the controls still lose focus, note the UE version, active editor widgets, steps to reproduce and any diagnostics before reporting.
 
 ## Report template
 
