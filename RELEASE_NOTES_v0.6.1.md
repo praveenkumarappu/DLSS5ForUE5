@@ -7,7 +7,10 @@
 - **Improved motion-vector guidance:** Uses display-pixel motion-vector units for the NR path and aligns depth/motion guides to the Neural Rendering color resolution to reduce temporal misalignment.
 - **Highlight preservation:** Optional restoration of bright, tonemapped highlights over the NR result to help retain emissive and specular intensity.
 - **Better Editor setting behavior:** Improved synchronization between launch CVars and the Editor control window without unexpectedly overwriting existing runtime settings.
-- **Rebuilt for UE 5.5, 5.6, 5.7, and 5.8:** Refreshed Editor Win64 binaries and corrected the About-panel build date to **2026-10-27**.
+
+## Compatibility
+
+Editor Win64 builds are provided for **Unreal Engine 5.5, 5.6, 5.7 and 5.8**. Choose the ZIP matching your engine version.
 
 ## Maintainer verification
 
