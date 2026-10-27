@@ -44,12 +44,16 @@ legally obtained NR runtime installed as described in the main README.
    Each view/pass must have independent history and reset on a camera cut.
 4. Disable NR for several frames and re-enable it. Close views, return after a
    pause, and exit the editor. Check for GPU faults and NGX errors.
-5. Repeat in a packaged build and on the other supported engine versions.
+5. Repeat Editor-side validation on the other supported engine versions. Packaged Development/Shipping native NR remains unsupported; packaged launch or graceful fallback is not an inference acceptance test.
 
 Steps above describe the review checklist, not a claim that every case was run.
 
-## Stable baseline and packaged support
+## Current baseline and packaged support
 
-The maintained stable baseline is v0.6.0. Existing maintainer editor validation covers the NR lifetime update on UE 5.5 and UE 5.6; equivalent v0.6.0 runtime validation on UE 5.7 and UE 5.8 remains pending. No new compilation, GPU, or inference tests were performed for this documentation alignment.
+The maintained source baseline is **v0.6.1**. The maintainer confirmed working Neural Rendering in the UE 5.6 and UE 5.8 Editor viewport and Movie Render Queue using the final compiled builds. UE 5.5 and UE 5.7 Editor packages compiled successfully; equivalent runtime/MRQ acceptance for those final builds is not asserted.
 
-Packaged Development and Shipping native NR are unsupported for this baseline. Separate v0.6.1 validation reported NGX Init_Ext failure `0xBAD00002` with zero successful native evaluations; this must not be presented as direct v0.6.0 validation. Packaging success, DLL loading, mock tests, and fallback frames do not establish native neural inference.
+The deterministic CPU/mock regression tests validate feature-state behavior and do not independently prove GPU correctness. Native packaged Development/Shipping Neural Rendering remains unsupported. Prior packaged experiments returned `NVSDK_NGX_D3D12_Init_Ext` failure `0xBAD00002` with zero successful native NR evaluations. A successful launch, fallback frame or DLL load is not native inference.
+
+## Optional initialization diagnostics
+
+`-DLSS5InitDiagnostics` can write JSONL diagnostic reports under the project's Saved directory (or a path supplied by `DLSS5InitDiagFile=`). These reports can contain executable paths, project paths, loaded module filenames, diagnostic addresses and GPU/NGX state. **Review and redact identifying paths or sensitive information before sharing them publicly.** This diagnostic mode is opt-in.
