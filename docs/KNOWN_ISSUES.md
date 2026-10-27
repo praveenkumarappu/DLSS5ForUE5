@@ -4,7 +4,7 @@
 
 With some NVIDIA Streamline plugin builds, starting Movie Render Queue with DLSS/DLAA can assert inside NVIDIA's `StreamlineRHI::OnBeginPIE()` due to an invalid supported/unsupported PIE state combination.
 
-The observed call stack is inside NVIDIA Streamline rather than DLSS5ForUE5. If encountered, test MRQ with optional Streamline features such as Frame Generation / Reflex disabled while keeping NVIDIA DLSS and DLSS Movie Pipeline support enabled.
+The reported call stack is inside NVIDIA Streamline rather than DLSS5ForUE5. This [v0.6.0 issue](https://github.com/praveenkumarappu/DLSS5ForUE5/issues/3) was closed after the maintainer confirmed working v0.6.1 MRQ on UE 5.6 and UE 5.8, **not** after independently verifying a fix for the original NVIDIA assertion. If encountered, test MRQ with optional Streamline features such as Frame Generation / Reflex disabled while keeping NVIDIA DLSS and DLSS Movie Pipeline support enabled, and report the exact version and crash log.
 
 ## Motion source can report 1×1
 
