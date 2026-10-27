@@ -1,0 +1,61 @@
+name: One-time v0.6.1 draft asset filename alignment
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-v061-rename-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rename-draft-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rename four existing assets without uploading or changing bytes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const releaseId = 425483586;
+            const mappings = [{"before":"DLSS5ForUE5-v0.6.1-UE5.5-Editor-Win64.zip","after":"DLSS5ForUE5.v0.6.1.-UE5.5.zip"},{"before":"DLSS5ForUE5-v0.6.1-UE5.6-Editor-Win64.zip","after":"DLSS5ForUE5.v0.6.1.-UE5.6.zip"},{"before":"DLSS5ForUE5-v0.6.1-UE5.7-Editor-Win64.zip","after":"DLSS5ForUE5.v0.6.1.-UE5.7.zip"},{"before":"DLSS5ForUE5-v0.6.1-UE5.8-Editor-Win64.zip","after":"DLSS5ForUE5.v0.6.1.-UE5.8.zip"}];
+            const expectedHashes = ["sha256:8c563b551a7866f3fcf7fe2faee638e6a9d9dac5cd722a4548aecab18487e61e","sha256:ce66c0b2c05347267935b4b192d0f6278dfa9c0594b4cdda4887db6133205f32","sha256:4d0574ce339823176727851cfb1fd9382811aa5f7a0c88784a8e83d9e3336cc9","sha256:99ae49696048f618c8887fc77f217d048a4758d08339c0c3417a609bc8c53c7a"];
+            const { data: release } = await github.rest.repos.getRelease({ owner, repo, release_id: releaseId });
+            if (!release.draft || release.name !== 'DLSS5ForUE5 v0.6.1' ||
+                release.tag_name !== 'v0.6.1' || release.assets.length !== 4) {
+              core.setFailed('Expected existing v0.6.1 draft with exactly four assets; refusing changes.');
+              return;
+            }
+            for (let i = 0; i < mappings.length; i++) {
+              const m = mappings[i];
+              const asset = release.assets.find(a => a.name === m.before || a.name === m.after);
+              if (!asset || asset.digest !== expectedHashes[i] || !asset.size ||
+                  !Number.isInteger(asset.size)) {
+                core.setFailed('Missing or mismatched digest/size for UE5.'+(i+5)+' asset. No change.');
+                return;
+              }
+            }
+            for (let i = 0; i < mappings.length; i++) {
+              const m = mappings[i];
+              const asset = release.assets.find(a => a.name === m.before);
+              if (!asset) {
+                core.info('Already named: '+m.after);
+                continue;
+              }
+              const {data: renamed} = await github.rest.repos.updateReleaseAsset({
+                owner, repo, asset_id: asset.id, name: m.after,
+              });
+              if (renamed.name !== m.after || renamed.digest !== expectedHashes[i] ||
+                  renamed.size !== asset.size) {
+                core.setFailed('Renamed asset metadata verification failed: '+m.after);
+                return;
+              }
+              core.info('Renamed '+m.before+' to '+m.after);
+            }
+            const { data: verified } = await github.rest.repos.getRelease({ owner, repo, release_id: releaseId });
+            if (!verified.draft || verified.assets.length !== 4 ||
+                mappings.some((m,i)=>!verified.assets.some(a=>a.name===m.after && a.digest===expectedHashes[i]))) {
+              core.setFailed('Draft, filenames or hashes mismatch following metadata-only rename.');
+              return;
+            }
+            core.info('All four renamed. Bytes/checksums intact. Draft remains unpublished.');
