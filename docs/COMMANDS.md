@@ -33,6 +33,9 @@ r.DLSS5.MVecScaleX
 r.DLSS5.MVecScaleY
 r.DLSS5.ExposureResetRatio
 r.DLSS5.Debug
+r.DLSS5.HighlightPreserve
+r.DLSS5.HighlightPreserveStart
+r.DLSS5.HighlightPreserveEnd
 ```
 
 ## Pass Count
@@ -43,3 +46,7 @@ r.DLSS5.PassCount 2
 r.DLSS5.PassCount 3
 r.DLSS5.PassCount 4
 ```
+
+## Optional highlight preservation
+
+`r.DLSS5.HighlightPreserve` toggles restoration of bright highlights over the Neural Rendering output (`0` off, `1` on). The `HighlightPreserveStart` and `HighlightPreserveEnd` controls set the blend thresholds in the **current post-tonemap color-buffer units**, not absolute scene luminance or HDR nits. The end threshold must exceed the start threshold for recovery to apply.
