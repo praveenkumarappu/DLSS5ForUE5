@@ -17,3 +17,5 @@ jobs:
         uses: actions/checkout@v4
       - name: Check tracked text files
         run: python3 Scripts/check_public_text.py
+      - name: Validate release documentation contract
+        run: python3 Scripts/check_release_contract.py
