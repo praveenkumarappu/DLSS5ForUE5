@@ -86,6 +86,8 @@ static TAutoConsoleVariable<int32> CVarDLSS5NRDebug(
     TEXT("r.DLSS5.Debug"), 1,
     TEXT("Verbose DLSS5 logging."), ECVF_RenderThreadSafe);
 
+static TAutoConsoleVariable<int32> CVarEncodeLinear(TEXT("r.DLSS5.EncodeLinearInput"),1,
+    TEXT("When the tonemapper outputs linear (Movie Render Queue), sRGB-encode NR's input and decode its output so NR sees the same picture as the editor viewport."),ECVF_RenderThreadSafe);
 static TAutoConsoleVariable<int32> CVarHighlight(TEXT("r.DLSS5.HighlightPreserve"),0,
     TEXT("Optional post-tonemap highlight recovery. Disabled by default; validate thresholds for the output encoding."),ECVF_RenderThreadSafe);
 static TAutoConsoleVariable<float> CVarHighlightStart(TEXT("r.DLSS5.HighlightPreserveStart"),0.7f,
@@ -95,6 +97,7 @@ static TAutoConsoleVariable<float> CVarHighlightEnd(TEXT("r.DLSS5.HighlightPrese
 
 namespace DLSS5NR
 {
+    int32 GetEncodeLinearInput() { return CVarEncodeLinear.GetValueOnRenderThread(); }
     int32 GetHighlightPreserve() { return CVarHighlight.GetValueOnRenderThread(); }
     float GetHighlightStart() { return CVarHighlightStart.GetValueOnRenderThread(); }
     float GetHighlightEnd() { return CVarHighlightEnd.GetValueOnRenderThread(); }

@@ -4,6 +4,7 @@
 
 namespace DLSS5NR
 {
+    int32 GetEncodeLinearInput();
     int32 GetHighlightPreserve();
     float GetHighlightStart();
     float GetHighlightEnd();

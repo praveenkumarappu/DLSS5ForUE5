@@ -160,6 +160,39 @@ public:
     static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& P)
     { return IsFeatureLevelSupported(P.Platform,ERHIFeatureLevel::SM5); }
 };
+class FDLSS5NREncodeCS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FDLSS5NREncodeCS);
+    SHADER_USE_PARAMETER_STRUCT(FDLSS5NREncodeCS,FGlobalShader);
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputColor)
+        SHADER_PARAMETER(FIntPoint, RectMin)
+        SHADER_PARAMETER(FIntPoint, RectSize)
+        SHADER_PARAMETER(uint32, Decode)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, OutputColor)
+    END_SHADER_PARAMETER_STRUCT()
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& P)
+    { return IsFeatureLevelSupported(P.Platform,ERHIFeatureLevel::SM5); }
+};
+IMPLEMENT_GLOBAL_SHADER(FDLSS5NREncodeCS,"/DLSS5NR/Private/DLSS5NREncode.usf","EncodeMainCS",SF_Compute);
+
+// Linear <-> sRGB around NR for Movie Render Queue's linear tonemap output.
+FRDGTextureRef AddDLSS5NRSrgbPass(FRDGBuilder& GraphBuilder,const FSceneView& View,
+    FRDGTextureRef Input,const FIntRect& Rect,bool bDecode)
+{
+    FRDGTextureRef Output=GraphBuilder.CreateTexture(Input->Desc,bDecode?TEXT("DLSS5NR.SrgbDecode"):TEXT("DLSS5NR.SrgbEncode"));
+    // Pixels outside the view rect keep the input, as with the plain copies around NR.
+    AddCopyTexturePass(GraphBuilder,Input,Output);
+    auto* P=GraphBuilder.AllocParameters<FDLSS5NREncodeCS::FParameters>();
+    P->InputColor=Input;P->RectMin=Rect.Min;P->RectSize=Rect.Size();P->Decode=bDecode;
+    P->OutputColor=GraphBuilder.CreateUAV(Output);
+    TShaderMapRef<FDLSS5NREncodeCS> Shader(GetGlobalShaderMap(View.GetFeatureLevel()));
+    FComputeShaderUtils::AddPass(GraphBuilder,bDecode?RDG_EVENT_NAME("DLSS5NR sRGB Decode"):RDG_EVENT_NAME("DLSS5NR sRGB Encode"),
+        Shader,P,FComputeShaderUtils::GetGroupCount(Rect.Size(),FIntPoint(8,8)));
+    return Output;
+}
+
 IMPLEMENT_GLOBAL_SHADER(FDLSS5NRHighlightCS,"/DLSS5NR/Private/DLSS5NRHighlightPreserve.usf","HighlightMainCS",SF_Compute);
 
 FRDGTextureRef AddDLSS5NRHighlightPass(FRDGBuilder& GraphBuilder,const FSceneView& View,

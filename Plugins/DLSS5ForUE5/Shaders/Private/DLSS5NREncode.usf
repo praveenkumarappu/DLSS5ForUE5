@@ -1,0 +1,29 @@
+#include "/Engine/Public/Platform.ush"
+// Movie Render Queue tonemaps to LINEAR (SCS_FinalToneCurveHDR) and adds the sRGB curve only
+// when it writes the file, while the editor viewport hands NR an sRGB-encoded buffer. Encode = linear -> sRGB before
+// NR, Decode = sRGB -> linear after, so NR always sees the same display-encoded picture as in the viewport.
+Texture2D<float4> InputColor;
+int2 RectMin;
+int2 RectSize;
+uint Decode;
+RWTexture2D<float4> OutputColor;
+
+float3 LinearToSrgb(float3 L)
+{
+    float3 A = abs(L);
+    return sign(L) * select(A <= 0.0031308, A * 12.92, 1.055 * pow(A, 1.0 / 2.4) - 0.055);
+}
+float3 SrgbToLinear(float3 S)
+{
+    float3 A = abs(S);
+    return sign(S) * select(A <= 0.04045, A / 12.92, pow((A + 0.055) / 1.055, 2.4));
+}
+
+[numthreads(8,8,1)]
+void EncodeMainCS(uint3 Id : SV_DispatchThreadID)
+{
+    if (any(Id.xy >= uint2(RectSize))) return;
+    int2 Pixel = RectMin + int2(Id.xy);
+    float4 C = InputColor.Load(int3(Pixel,0));
+    OutputColor[Pixel] = float4(Decode != 0 ? SrgbToLinear(C.rgb) : LinearToSrgb(C.rgb), C.a);
+}

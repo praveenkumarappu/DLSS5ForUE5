@@ -29,5 +29,7 @@ FRDGTextureRef AddDLSS5NRMotionVectorResolvePass(
     const FIntRect& ViewRect,
     const FIntPoint& OutputSize);
 
+FRDGTextureRef AddDLSS5NRSrgbPass(FRDGBuilder&,const FSceneView&,FRDGTextureRef,const FIntRect&,bool);
+
 FRDGTextureRef AddDLSS5NRHighlightPass(FRDGBuilder&,const FSceneView&,FRDGTextureRef,FRDGTextureRef,
     const FIntRect&,float,float,bool,bool);
