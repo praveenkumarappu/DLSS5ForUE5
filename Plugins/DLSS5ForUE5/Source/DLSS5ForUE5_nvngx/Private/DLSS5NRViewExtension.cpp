@@ -329,6 +329,15 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
     AddDrawTexturePass(GraphBuilder, ViewInfo, SceneColor, NRInputScreen);
 
+    // Movie Render Queue tonemaps to linear and sRGB-encodes only when writing the file; NR is made for
+    // the display-encoded picture the editor viewport gives it. Encode here, decode after the last NR pass.
+    const bool bLinearInput = DLSS5NR::GetEncodeLinearInput() != 0 && View.Family &&
+        View.Family->SceneCaptureSource == SCS_FinalToneCurveHDR;
+    if (bLinearInput)
+    {
+        NRInput = AddDLSS5NRSrgbPass(GraphBuilder, View, NRInput, ColorRect, false);
+    }
+
     FDLSS5NRFrameConfig Config;
     Config.Preset = FMath::Clamp(DLSS5NR::GetPreset(), 0, 3);
     Config.PassCount = FMath::Clamp(DLSS5NR::GetPassCount(), 1, 4);
@@ -500,6 +509,11 @@ FScreenPassTexture FDLSS5NRViewExtension::AfterTonemap_RenderThread(
 
         CurrentPassInput = PassOutput;
         FinalNROutput = PassOutput;
+    }
+
+    if (bLinearInput)
+    {
+        FinalNROutput = AddDLSS5NRSrgbPass(GraphBuilder, View, FinalNROutput, ColorRect, true);
     }
 
     const IConsoleVariable* AlphaCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.PostProcessing.PropagateAlpha"));
